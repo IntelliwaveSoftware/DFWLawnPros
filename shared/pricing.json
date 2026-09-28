@@ -1,0 +1,80 @@
+{
+  "description": "Instant Quote price model. Estimates are ranges shown to consumers; the matched local pro confirms final pricing. Each item: price = max(min, base + per_sqft * sqft), computed for low and high.",
+  "lawn_size_presets": [
+    { "key": "small", "label": "Small", "hint": "Under 3,000 sq ft", "sqft": 2500 },
+    { "key": "medium", "label": "Medium", "hint": "3,000 – 7,000 sq ft", "sqft": 5000 },
+    { "key": "large", "label": "Large", "hint": "7,000 – 12,000 sq ft", "sqft": 9500 },
+    { "key": "xlarge", "label": "Extra large", "hint": "12,000+ sq ft", "sqft": 15000 }
+  ],
+  "items": [
+    {
+      "key": "mowing",
+      "label": "Lawn mowing",
+      "description": "Mow, edge, trim and blow clean.",
+      "lead_service": "lawn_care",
+      "unit": "per visit",
+      "base": [30, 40],
+      "per_sqft": [0.0035, 0.005],
+      "min": [40, 50],
+      "options": {
+        "key": "frequency",
+        "label": "How often?",
+        "choices": [
+          { "key": "weekly", "label": "Weekly", "multiplier": 1.0 },
+          { "key": "biweekly", "label": "Every 2 weeks", "multiplier": 1.2 },
+          { "key": "one_time", "label": "One-time cut", "multiplier": 1.5 }
+        ]
+      }
+    },
+    {
+      "key": "fertilization",
+      "label": "Fertilization & weed control",
+      "description": "Seasonal applications for a thick, green lawn.",
+      "lead_service": "lawn_care",
+      "unit": "per application",
+      "base": [35, 45],
+      "per_sqft": [0.005, 0.007],
+      "min": [50, 60]
+    },
+    {
+      "key": "aeration",
+      "label": "Core aeration",
+      "description": "Relieves compacted North Texas clay soil.",
+      "lead_service": "lawn_care",
+      "unit": "one-time",
+      "base": [60, 80],
+      "per_sqft": [0.01, 0.014],
+      "min": [95, 120]
+    },
+    {
+      "key": "sod",
+      "label": "Sod installation",
+      "description": "Remove old turf, grade, and lay fresh sod.",
+      "lead_service": "sod",
+      "unit": "installed",
+      "base": [250, 400],
+      "per_sqft": [1.6, 2.4],
+      "min": [900, 1200]
+    },
+    {
+      "key": "artificial_turf",
+      "label": "Artificial turf",
+      "description": "Low-maintenance synthetic grass, fully installed.",
+      "lead_service": "artificial_turf",
+      "unit": "installed",
+      "base": [500, 800],
+      "per_sqft": [8, 13],
+      "min": [3000, 4000]
+    },
+    {
+      "key": "irrigation_checkup",
+      "label": "Sprinkler check-up",
+      "description": "Inspect zones, adjust heads, fix minor leaks.",
+      "lead_service": "irrigation",
+      "unit": "one-time",
+      "base": [95, 150],
+      "per_sqft": [0, 0],
+      "min": [95, 150]
+    }
+  ]
+}

@@ -1,0 +1,247 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: DFW Lawn Pros — lead marketplace API (API Gateway HTTP API + one Lambda + Cognito)
+
+Parameters:
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: postgresql://user:password@host:5432/dbname (RDS / Aurora PostgreSQL)
+  AnthropicApiKey:
+    Type: String
+    NoEcho: true
+  StripeSecretKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: Leave empty to complete purchases without payment (MVP invoicing mode)
+  StripeWebhookSecret:
+    Type: String
+    NoEcho: true
+    Default: ''
+  SiteUrl:
+    Type: String
+    Default: http://localhost:5173
+    Description: Public URL of the React site (Stripe redirects, CORS)
+  AllowedOrigins:
+    Type: CommaDelimitedList
+    Default: http://localhost:5173
+  EnrichmentModel:
+    Type: String
+    Default: claude-opus-5
+
+Globals:
+  Function:
+    Runtime: nodejs24.x
+    Architectures: [arm64]
+    MemorySize: 512
+    Timeout: 60
+
+Resources:
+  # ---------------------------------------------------------------- Auth
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub ${AWS::StackName}-users
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: false
+      Schema:
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: web
+      GenerateSecret: false
+      ExplicitAuthFlows: [ALLOW_USER_PASSWORD_AUTH, ALLOW_REFRESH_TOKEN_AUTH, ALLOW_USER_SRP_AUTH]
+      PreventUserExistenceErrors: ENABLED
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      RefreshTokenValidity: 30
+      TokenValidityUnits: { AccessToken: hours, IdToken: hours, RefreshToken: days }
+
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admin
+      UserPoolId: !Ref UserPool
+      Description: Internal staff with access to the admin dashboard
+
+  # ---------------------------------------------------------------- API
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins: !Ref AllowedOrigins
+        AllowHeaders: [authorization, content-type]
+        AllowMethods: [GET, POST, PUT, PATCH, OPTIONS]
+        MaxAge: 600
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 20
+      Auth:
+        DefaultAuthorizer: CognitoJwt
+        Authorizers:
+          CognitoJwt:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
+              audience: [!Ref UserPoolClient]
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-api
+      # Prebuilt by `npm run build` (esbuild → dist/index.mjs); deploy with `npm run deploy`.
+      CodeUri: dist
+      Handler: index.handler
+      Environment:
+        Variables:
+          DATABASE_URL: !Ref DatabaseUrl
+          ANTHROPIC_API_KEY: !Ref AnthropicApiKey
+          ENRICHMENT_MODEL: !Ref EnrichmentModel
+          STRIPE_SECRET_KEY: !Ref StripeSecretKey
+          STRIPE_WEBHOOK_SECRET: !Ref StripeWebhookSecret
+          SITE_URL: !Ref SiteUrl
+          NODE_OPTIONS: --enable-source-maps
+          # Trust the Amazon RDS certificate authorities so TLS to Aurora verifies (bundled in the Node runtime).
+          NODE_EXTRA_CA_CERTS: /var/runtime/ca-cert.pem
+      Policies:
+        # Async self-invocation for LLM enrichment after lead intake.
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-api
+      Events:
+        # Public
+        SubmitLead:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: POST
+            Path: /leads
+            Auth:
+              Authorizer: NONE
+        StripeWebhook:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: POST
+            Path: /webhooks/stripe
+            Auth:
+              Authorizer: NONE
+        # Admin (group check happens in code)
+        ListLeads:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /admin/leads
+        GetLead:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /admin/leads/{id}
+        UpdateLead:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: PATCH
+            Path: /admin/leads/{id}
+        Analytics:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /admin/analytics
+        ListContractors:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /admin/contractors
+        UpdateContractor:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: PATCH
+            Path: /admin/contractors/{id}
+        GetRules:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /admin/scoring-rules
+        PutRules:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: PUT
+            Path: /admin/scoring-rules
+        # Contractor
+        GetProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /contractor/profile
+        PutProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: PUT
+            Path: /contractor/profile
+        AvailableLeads:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /contractor/leads/available
+        PurchasedLeads:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /contractor/leads/purchased
+        ContractorLead:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /contractor/leads/{id}
+        PurchaseLead:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: POST
+            Path: /contractor/leads/{id}/purchase
+        UpdateOutcome:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: PUT
+            Path: /contractor/leads/{id}/outcome
+
+Outputs:
+  ApiUrl:
+    Description: Set as VITE_API_BASE_URL in web/.env
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  CognitoRegion:
+    Value: !Ref AWS::Region
+  CognitoClientId:
+    Description: Set as VITE_COGNITO_CLIENT_ID in web/.env
+    Value: !Ref UserPoolClient
+  UserPoolId:
+    Value: !Ref UserPool

@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "description": "Deterministic MVP lead scoring. Raw points are summed and normalized to 0-100 against the maximum possible points of enabled rules. Edit points/conditions here (or via the admin Scoring page) - no code changes required.",
+  "rules": [
+    {
+      "id": "budget_over_10k",
+      "label": "Budget over $10,000",
+      "points": 20,
+      "enabled": true,
+      "condition": { "field": "budget_min", "op": "gte", "value": 10000 }
+    },
+    {
+      "id": "starts_within_30_days",
+      "label": "Project starts within 30 days",
+      "points": 15,
+      "enabled": true,
+      "condition": { "field": "timeframe_days", "op": "lte", "value": 30 }
+    },
+    {
+      "id": "high_value_service",
+      "label": "High-value service",
+      "points": 15,
+      "enabled": true,
+      "condition": { "field": "service_high_value", "op": "eq", "value": true }
+    },
+    {
+      "id": "large_project",
+      "label": "Large project",
+      "points": 15,
+      "enabled": true,
+      "condition": {
+        "any": [
+          { "field": "details.project_size", "op": "in", "value": ["large", "xlarge"] },
+          { "field": "enrichment.estimated_project_size", "op": "eq", "value": "large" },
+          { "field": "lawn_sqft", "op": "gte", "value": 10000 }
+        ]
+      }
+    },
+    {
+      "id": "detailed_description",
+      "label": "Detailed project description",
+      "points": 10,
+      "enabled": true,
+      "condition": { "field": "description_length", "op": "gte", "value": 120 }
+    },
+    {
+      "id": "phone_verified",
+      "label": "Phone verified",
+      "points": 10,
+      "enabled": true,
+      "condition": { "field": "phone_verified", "op": "eq", "value": true }
+    },
+    {
+      "id": "high_ai_intent",
+      "label": "High purchase intent (AI)",
+      "points": 10,
+      "enabled": true,
+      "condition": { "field": "enrichment.intent", "op": "eq", "value": "high" }
+    },
+    {
+      "id": "complete_contact",
+      "label": "Complete contact information",
+      "points": 5,
+      "enabled": true,
+      "condition": {
+        "all": [
+          { "field": "name", "op": "present" },
+          { "field": "email", "op": "present" },
+          { "field": "phone", "op": "present" },
+          { "field": "zip_code", "op": "present" }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,215 @@
+// Prisma schema for the DFW Lawn Pros lead marketplace.
+//
+// Field names are snake_case on purpose: they are the JSON API contract the web app
+// consumes (web/src/lib/types.ts), so rows can be returned without a mapping layer.
+//
+// Provenance convention:
+//   Lead            customer-provided (except status/score/price/phone_verified = system)
+//   LeadEnrichment  AI-derived; never authoritative for facts the customer didn't state
+//   Lead.score*, LeadEvent, ScoringConfig   system-calculated
+//
+// Two partial unique indexes can't be expressed here and live in the init migration SQL:
+//   lead_purchases_exclusive_idx      one live (pending/completed) purchase per lead
+//   lead_events_presented_once_idx    one "presented" event per lead/contractor
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  runtime             = "nodejs"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LeadStatus {
+  new
+  available
+  purchased
+  closed
+  rejected
+
+  @@map("lead_status")
+}
+
+enum LeadSource {
+  lead_form
+  instant_quote
+
+  @@map("lead_source")
+}
+
+enum PurchaseStatus {
+  pending_payment
+  completed
+  refunded
+  cancelled
+
+  @@map("purchase_status")
+}
+
+model Lead {
+  id         String   @id @default(uuid()) @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  // customer-provided
+  name                String     @db.VarChar(120)
+  email               String     @db.VarChar(200)
+  /// Optional. When present, the accepted consent must be the phone variant (shared/consent.ts).
+  phone               String?    @db.VarChar(40)
+  address             String?    @db.VarChar(300)
+  city                String     @db.VarChar(100)
+  state               String     @default("TX") @db.VarChar(2)
+  zip_code            String     @db.VarChar(10)
+  lat                 Float?
+  lng                 Float?
+  service             String     @db.VarChar(40)
+  budget              String     @db.VarChar(40)
+  timeframe           String     @db.VarChar(40)
+  project_description String
+  /// Answers to conditional, service-specific questions.
+  details             Json       @default("{}")
+  /// Instant quote shown to the customer (system-calculated).
+  quote               Json?
+  source              LeadSource
+  utm                 Json?
+  consent_timestamp   DateTime   @db.Timestamptz(3)
+  consent_text        String
+  ip_address          String?    @db.VarChar(45)
+  user_agent          String?    @db.VarChar(500)
+
+  // system
+  status          LeadStatus @default(new)
+  phone_verified  Boolean    @default(false)
+  score           Int?       @db.SmallInt
+  score_breakdown Json?
+  price           Decimal    @db.Decimal(10, 2)
+
+  enrichment LeadEnrichment?
+  purchases  LeadPurchase[]
+  outcomes   LeadOutcome[]
+  events     LeadEvent[]
+
+  @@index([created_at(sort: Desc)])
+  @@index([status])
+  @@index([service, zip_code])
+  @@index([email])
+  @@map("leads")
+}
+
+/// AI-derived. One row per lead; re-enrichment overwrites and logs an event.
+model LeadEnrichment {
+  lead_id                String   @id @db.Uuid
+  extracted_services     String[] @default([])
+  project_type           String?
+  estimated_project_size String?  @db.VarChar(10)
+  estimated_budget       Decimal? @db.Decimal(12, 2)
+  urgency                String?  @db.VarChar(10)
+  intent                 String?  @db.VarChar(10)
+  ai_summary             String?
+  model                  String
+  raw_output             Json?
+  enrichment_timestamp   DateTime @default(now()) @db.Timestamptz(3)
+
+  lead Lead @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+
+  @@map("lead_enrichments")
+}
+
+/// One contractor company per Cognito user.
+model Contractor {
+  id                 String   @id @default(uuid()) @db.Uuid
+  cognito_sub        String   @unique
+  company_name       String   @db.VarChar(200)
+  contact_name       String   @db.VarChar(200)
+  email              String   @db.VarChar(200)
+  phone              String   @default("") @db.VarChar(40)
+  /// ZIP codes served.
+  service_area       String[] @default([])
+  services           String[] @default([])
+  active             Boolean  @default(true)
+  stripe_customer_id String?
+  created_at         DateTime @default(now()) @db.Timestamptz(3)
+  updated_at         DateTime @updatedAt @db.Timestamptz(3)
+
+  purchases LeadPurchase[]
+  outcomes  LeadOutcome[]
+  events    LeadEvent[]
+
+  @@index([service_area], type: Gin)
+  @@index([services], type: Gin)
+  @@map("contractors")
+}
+
+model LeadPurchase {
+  id                         String         @id @default(uuid()) @db.Uuid
+  lead_id                    String         @db.Uuid
+  contractor_id              String         @db.Uuid
+  price                      Decimal        @db.Decimal(10, 2)
+  purchased_at               DateTime       @default(now()) @db.Timestamptz(3)
+  status                     PurchaseStatus @default(completed)
+  stripe_checkout_session_id String?        @unique
+  stripe_payment_intent_id   String?
+
+  lead       Lead       @relation(fields: [lead_id], references: [id])
+  contractor Contractor @relation(fields: [contractor_id], references: [id])
+
+  @@index([contractor_id, purchased_at(sort: Desc)])
+  @@index([lead_id])
+  @@map("lead_purchases")
+}
+
+/// Current outcome per lead + contractor. History lives in LeadEvent.
+model LeadOutcome {
+  id                  String   @id @default(uuid()) @db.Uuid
+  lead_id             String   @db.Uuid
+  contractor_id       String   @db.Uuid
+  contacted           Boolean  @default(false)
+  qualified           Boolean  @default(false)
+  appointment_booked  Boolean  @default(false)
+  quote_given         Boolean  @default(false)
+  won                 Boolean  @default(false)
+  lost                Boolean  @default(false)
+  estimated_job_value Decimal? @db.Decimal(12, 2)
+  notes               String   @default("")
+  updated_at          DateTime @updatedAt @db.Timestamptz(3)
+
+  lead       Lead       @relation(fields: [lead_id], references: [id])
+  contractor Contractor @relation(fields: [contractor_id], references: [id])
+
+  @@unique([lead_id, contractor_id])
+  @@map("lead_outcomes")
+}
+
+/// Append-only lifecycle log — the training-data backbone for future ML models.
+///   generated → enriched → scored → presented → purchased → contacted → quoted → won/lost
+/// `type` is free text so new event/outcome types need no migration.
+model LeadEvent {
+  id            BigInt   @id @default(autoincrement())
+  lead_id       String   @db.Uuid
+  contractor_id String?  @db.Uuid
+  type          String   @db.VarChar(40)
+  payload       Json?
+  created_at    DateTime @default(now()) @db.Timestamptz(3)
+
+  lead       Lead        @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  contractor Contractor? @relation(fields: [contractor_id], references: [id])
+
+  @@index([lead_id, created_at])
+  @@index([type, created_at])
+  @@map("lead_events")
+}
+
+/// Versioned scoring rules; exactly one active. Seeded from shared/scoring-rules.json on first use.
+model ScoringConfig {
+  version    Int      @id @default(autoincrement())
+  rules      Json
+  active     Boolean  @default(false)
+  created_by String?
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("scoring_configs")
+}
