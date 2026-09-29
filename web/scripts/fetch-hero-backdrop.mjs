@@ -11,9 +11,9 @@ import { writeFile } from 'node:fs/promises'
 
 const SERVICE = 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage'
 const CENTER = { lat: 32.95, lng: -97.0 } // keep in sync with BACKDROP in src/content/landing.ts
-const ZOOM = 10
+const ZOOM = 11 // Dallas and Fort Worth both in view on a typical desktop, streets and lakes recognizable
 const VARIANTS = [
-  { file: 'public/images/dfw-metro-wide.jpg', width: 1920, height: 1200, scale: 1 }, // desktop, CSS px
+  { file: 'public/images/dfw-metro-wide.jpg', width: 2560, height: 1400, scale: 1 }, // desktop, CSS px (covers 2560px monitors)
   { file: 'public/images/dfw-metro-tall.jpg', width: 780, height: 1000, scale: 2 }, // phones
 ]
 

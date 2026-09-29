@@ -254,11 +254,11 @@ export function LawnQuoteLanding() {
             alt=""
             fetchPriority="high"
             style={{ filter: BACKDROP.filter }}
-            className="absolute top-1/2 left-1/2 h-auto w-[780px] max-w-none -translate-x-1/2 -translate-y-1/2 md:w-[1920px]"
+            className="absolute top-1/2 left-1/2 h-auto w-[780px] max-w-none -translate-x-1/2 -translate-y-1/2 md:w-[2560px]"
           />
         </picture>
         <div
-          className={`pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-forest-900/95 via-forest-900/75 to-forest-900/35 transition-opacity duration-700 ${
+          className={`pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-forest-900/80 via-forest-900/45 to-forest-900/10 transition-opacity duration-700 ${
             flying ? 'opacity-0' : ''
           }`}
         />
@@ -267,7 +267,7 @@ export function LawnQuoteLanding() {
           <CallButton dark />
         </header>
         <div
-          className={`container-x grid min-h-[calc(88svh-4rem)] items-center gap-10 pt-6 pb-16 transition-opacity duration-300 lg:grid-cols-[1.4fr_1fr] ${
+          className={`container-x grid min-h-[calc(88svh-4rem)] items-center gap-10 pt-6 pb-16 transition-opacity duration-300 [text-shadow:0_1px_12px_rgba(12,28,19,0.7)] lg:grid-cols-[1.4fr_1fr] ${
             flying ? 'pointer-events-none opacity-0' : ''
           }`}
         >

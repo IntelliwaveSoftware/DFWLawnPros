@@ -8,8 +8,8 @@
  */
 export const BACKDROP = {
   center: [32.95, -97.0] as [number, number],
-  zoom: 10,
-  wide: { src: '/images/dfw-metro-wide.jpg', width: 1920 },
+  zoom: 11,
+  wide: { src: '/images/dfw-metro-wide.jpg', width: 2560 },
   tall: { src: '/images/dfw-metro-tall.jpg', width: 780 },
   /** Color correction so the aerial image's tone matches the live satellite tiles it cross-fades into. */
   filter: 'saturate(1.35) contrast(1.12) brightness(0.88)',
