@@ -1,17 +1,15 @@
 // End-to-end handler tests against a real PostgreSQL (see docker-compose.yml).
-// The Anthropic SDK is stubbed, so tests never call the API — but the response parsing runs for real.
+// The Claude Platform on AWS client is stubbed, so tests never call the API — but the response parsing runs for real.
 import type { APIGatewayProxyEventV2 } from 'aws-lambda'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const anthropicCreate = vi.hoisted(() => vi.fn())
 
-vi.mock('@anthropic-ai/sdk', () => {
-  class APIError extends Error {}
-  class Anthropic {
-    static APIError = APIError
+vi.mock('@anthropic-ai/aws-sdk', () => {
+  class AnthropicAws {
     beta = { messages: { create: anthropicCreate } }
   }
-  return { default: Anthropic }
+  return { default: AnthropicAws }
 })
 
 const { consentText } = await import('../../shared/consent.js')
@@ -92,6 +90,16 @@ beforeEach(async () => {
 })
 
 afterAll(disconnect)
+
+describe('warmup', () => {
+  it('touches the database and returns no content', async () => {
+    const spy = vi.spyOn(db(), '$queryRaw')
+    const res = await call('GET /warmup')
+    expect(res.status).toBe(204)
+    expect(spy).toHaveBeenCalledOnce()
+    spy.mockRestore()
+  })
+})
 
 describe('lead lifecycle', () => {
   it('runs intake → enrichment → scoring → matching → exclusive purchase → outcome → analytics', async () => {
@@ -224,9 +232,9 @@ describe('lead lifecycle', () => {
     expect(isUniqueViolation(error)).toBe(true)
   })
 
-  it('accepts and scores a lead when enrichment throws (e.g. no ANTHROPIC_API_KEY)', async () => {
+  it('accepts and scores a lead when enrichment throws (e.g. missing IAM permission)', async () => {
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
-    anthropicCreate.mockRejectedValue(new Error('Could not resolve authentication method'))
+    anthropicCreate.mockRejectedValue(new Error('403 not authorized to perform aws-external-anthropic:CreateInference'))
     const created = await call('POST /leads', { body: LEAD })
     expect(created.status).toBe(201)
     const detail = await call('GET /admin/leads/{id}', { claims: ADMIN, params: { id: created.body.id } })
@@ -236,6 +244,17 @@ describe('lead lifecycle', () => {
     expect(detail.body.events.filter((e: { type: string }) => e.type === 'scored')).toHaveLength(2)
     expect(errorLog).toHaveBeenCalled()
     errorLog.mockRestore()
+  })
+
+  it('skips enrichment without calling Claude when no workspace is configured', async () => {
+    vi.stubEnv('ANTHROPIC_AWS_WORKSPACE_ID', '')
+    const created = await call('POST /leads', { body: LEAD })
+    vi.unstubAllEnvs()
+    expect(created.status).toBe(201)
+    expect(anthropicCreate).not.toHaveBeenCalled()
+    const detail = await call('GET /admin/leads/{id}', { claims: ADMIN, params: { id: created.body.id } })
+    expect(detail.body.enrichment).toBeNull()
+    expect(detail.body.lead.score).toBe(70)
   })
 
   it('accepts a lead without a phone number under the no-phone consent', async () => {

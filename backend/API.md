@@ -13,6 +13,7 @@ the client is [`web/src/api/httpApi.ts`](../web/src/api/httpApi.ts). Money field
 | Method | Path | Body → Response |
 |---|---|---|
 | POST | `/leads` | `LeadSubmission` → `201 { id }`. Validates, stores, scores, then enriches asynchronously and re-scores. `phone` is optional; the consent text's version tag must match it (`2026-09-v1` with a phone, `2026-09-v3` without — see `shared/consent.ts`), otherwise `400`. |
+| GET | `/warmup` | → `204`. Runs `SELECT 1` so the Lambda is warm and a paused Aurora resumes before a form submit. Called by the site on visitor activity, at most every 5 minutes per browser (`web/src/lib/warmup.ts`). Throttled to 5 requests/s. |
 | POST | `/webhooks/stripe` | Stripe event (signature-verified) → `200`. Completes/cancels pending purchases. |
 
 ## Admin (`admin` group)

@@ -179,7 +179,7 @@ export function InstantQuote() {
             <AddressSearch onSelect={chooseAddress} buttonLabel="Measure my lawn" />
           </div>
           <ul className="mt-10 flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-white/80">
-            {['Free & no obligation', 'Vetted local pros', 'Price confirmed on first visit'].map((t) => (
+            {['Free & no obligation', 'Trusted local pros', 'Price confirmed on first visit'].map((t) => (
               <li key={t} className="flex items-center gap-2">
                 <Check className="size-4 text-gold-soft" /> {t}
               </li>

@@ -20,6 +20,7 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
+    "@anthropic-ai/aws-sdk": "^0.7.5",
     "@anthropic-ai/sdk": "^0.128.0",
     "@aws-sdk/client-lambda": "^3.1141.0",
     "@prisma/adapter-pg": "^7.10.0",

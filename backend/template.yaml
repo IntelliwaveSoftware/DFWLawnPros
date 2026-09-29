@@ -7,9 +7,13 @@ Parameters:
     Type: String
     NoEcho: true
     Description: postgresql://user:password@host:5432/dbname (RDS / Aurora PostgreSQL)
-  AnthropicApiKey:
+  AnthropicWorkspaceId:
     Type: String
-    NoEcho: true
+    Default: ''
+    AllowedPattern: '^(wrkspc_[A-Za-z0-9]+)?$'
+    Description: >-
+      Claude Platform on AWS workspace (wrkspc_...) in this stack's region, used for AI enrichment.
+      Leave empty to skip enrichment; leads are still accepted and scored.
   StripeSecretKey:
     Type: String
     NoEcho: true
@@ -29,6 +33,9 @@ Parameters:
   EnrichmentModel:
     Type: String
     Default: claude-opus-5
+
+Conditions:
+  HasAnthropicWorkspace: !Not [!Equals [!Ref AnthropicWorkspaceId, '']]
 
 Globals:
   Function:
@@ -90,6 +97,11 @@ Resources:
       DefaultRouteSettings:
         ThrottlingBurstLimit: 50
         ThrottlingRateLimit: 20
+      # Each browser pings at most every 5 minutes; this caps abuse of the public route well below that.
+      RouteSettings:
+        GET /warmup:
+          ThrottlingBurstLimit: 10
+          ThrottlingRateLimit: 5
       Auth:
         DefaultAuthorizer: CognitoJwt
         Authorizers:
@@ -109,7 +121,8 @@ Resources:
       Environment:
         Variables:
           DATABASE_URL: !Ref DatabaseUrl
-          ANTHROPIC_API_KEY: !Ref AnthropicApiKey
+          # Claude Platform on AWS; AWS_REGION is set by Lambda itself.
+          ANTHROPIC_AWS_WORKSPACE_ID: !Ref AnthropicWorkspaceId
           ENRICHMENT_MODEL: !Ref EnrichmentModel
           STRIPE_SECRET_KEY: !Ref StripeSecretKey
           STRIPE_WEBHOOK_SECRET: !Ref StripeWebhookSecret
@@ -123,6 +136,14 @@ Resources:
             - Effect: Allow
               Action: lambda:InvokeFunction
               Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-api
+        # LLM enrichment through Claude Platform on AWS, signed with this function's role.
+        - !If
+          - HasAnthropicWorkspace
+          - Statement:
+              - Effect: Allow
+                Action: aws-external-anthropic:CreateInference
+                Resource: !Sub arn:aws:aws-external-anthropic:${AWS::Region}:${AWS::AccountId}:workspace/${AnthropicWorkspaceId}
+          - !Ref AWS::NoValue
       Events:
         # Public
         SubmitLead:
@@ -131,6 +152,14 @@ Resources:
             ApiId: !Ref HttpApi
             Method: POST
             Path: /leads
+            Auth:
+              Authorizer: NONE
+        Warmup:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /warmup
             Auth:
               Authorizer: NONE
         StripeWebhook:

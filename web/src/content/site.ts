@@ -12,7 +12,7 @@ export const BRAND = {
 
 export const HERO = {
   eyebrow: 'Dallas–Fort Worth Lawn Care & Landscaping',
-  title: 'Beautiful yards, built by vetted local pros.',
+  title: 'Beautiful yards, built by trusted local pros.',
   subtitle:
     'Get an instant lawn care price in 60 seconds, or tell us about your landscaping project and we’ll connect you with a trusted DFW company that specializes in exactly that.',
 }
@@ -60,7 +60,7 @@ export const AUDIENCES = [
 ]
 
 export const PILLARS = [
-  { title: 'Vetted local companies', body: 'We only work with established DFW landscaping companies that serve your ZIP code and offer the service you need.' },
+  { title: 'Trusted local companies', body: 'We only work with established DFW landscaping companies that serve your ZIP code and offer the service you need.' },
   { title: 'Fast, honest pricing', body: 'See a lawn care estimate instantly. For bigger projects, your pro provides a detailed quote after a site visit.' },
   { title: 'Your info, respected', body: 'Your request goes to a relevant local company to respond to you — never sold to a call center or spam list.' },
 ]

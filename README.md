@@ -44,7 +44,7 @@ Needs Docker. One-time setup:
 ```bash
 cd backend
 npm install
-cp .env.example .env    # DATABASE_URL for the local Postgres; add ANTHROPIC_API_KEY for AI enrichment
+cp .env.example .env    # DATABASE_URL for the local Postgres; add ANTHROPIC_AWS_WORKSPACE_ID for AI enrichment
 npm run db:up           # PostgreSQL in Docker on :55432
 npm run db:deploy       # apply migrations
 npm run db:seed         # demo contractors + leads (no Claude calls)
@@ -75,14 +75,18 @@ How it works:
 - `VITE_AUTH_MODE=local` replaces Cognito with password-less sign-in that issues **unsigned** tokens carrying the
   same claims Cognito would. Only the local dev server accepts them; production builds ignore the setting and the
   deployed API Gateway rejects the tokens. The dev server binds to 127.0.0.1 only.
-- Without `ANTHROPIC_API_KEY`, leads are still accepted and scored; the AI panel just stays empty. With a key,
-  each submitted lead makes one Claude call (enrichment runs inline locally, so the submit waits for it).
+- Without `ANTHROPIC_AWS_WORKSPACE_ID`, leads are still accepted and scored; the AI panel just stays empty. With it
+  (and an active `aws sso login`), each submitted lead makes one Claude call through Claude Platform on AWS
+  (enrichment runs inline locally, so the submit waits for it).
 - To start over: `cd backend && npx prisma migrate reset` (drops local data), then `npm run db:seed`.
 - To go back to demo mode, remove `web/.env.local`.
 
 ## Deploy the backend
 
-Prereqs: AWS SAM CLI, an Aurora PostgreSQL (or RDS PostgreSQL) database, an Anthropic API key.
+Prereqs: AWS SAM CLI and an Aurora PostgreSQL (or RDS PostgreSQL) database. For AI enrichment, a
+[Claude Platform on AWS](https://platform.claude.com/docs/en/build-with-claude/claude-platform-on-aws)
+workspace in the stack's region (pass it as `AnthropicWorkspaceId`); the Lambda calls Claude with its own IAM
+role, so there is no API key. Without a workspace, leads are still accepted and scored.
 
 ```bash
 cd backend
@@ -118,6 +122,84 @@ Contractors self-register at `/contractor/signup`.
 **Schema changes:** edit `backend/prisma/schema.prisma`, then `npm run db:migrate` locally. Two partial unique
 indexes (exclusive purchases, one "presented" event per contractor) are hand-written in the init migration
 because Prisma's schema language can't express them.
+
+## Continuous deployment (GitHub Actions)
+
+Two workflows run on every pull request and deploy on every push to `main`. Each only runs when its own code
+(or `shared/`) changes:
+
+| Workflow | Pull request | Push to `main` |
+| --- | --- | --- |
+| [backend.yml](.github/workflows/backend.yml) | build + tests against a Postgres service | `prisma migrate deploy`, then `sam deploy` of `backend/template.yaml` |
+| [web.yml](.github/workflows/web.yml) | lint + build | build against the API stack's outputs, upload to S3, invalidate CloudFront |
+
+GitHub gets short-lived AWS credentials through OIDC; no AWS keys are stored in GitHub. Only jobs in the
+`production` GitHub environment can assume the deploy role.
+
+**One-time setup**
+
+1. Edit [infra/config.json](infra/config.json): AWS region, stack names, GitHub repo, and optionally a custom
+   domain (`domain.names` plus an ACM `certificateArn` in us-east-1). Under `buckets`:
+
+   | `buckets.site` / `buckets.artifacts` | What setup does |
+   | --- | --- |
+   | `""` (default) | Creates the bucket with a generated name |
+   | a name that doesn't exist yet | Creates the bucket with that name (names are global across AWS) |
+   | a name that exists in your account and region | Reuses it. If a reused site bucket already has a bucket policy, setup leaves the policy alone and prints the one statement to add so CloudFront can read the site. |
+
+2. With admin AWS credentials, run the setup ([infra/setup.mjs](infra/setup.mjs), which deploys
+   [infra/bootstrap.yaml](infra/bootstrap.yaml)). It's safe to re-run after changing the config:
+
+   ```bash
+   node infra/setup.mjs --dry-run   # show what would be reused or created; changes nothing
+   node infra/setup.mjs --github    # deploy, then copy the outputs into the GitHub environment's variables
+   ```
+
+   Without `--github`, set the variables by hand from the printed outputs. Buckets that setup creates stay
+   part of the stack, so a later run keeps them; renaming one isn't supported. It also reuses an existing
+   GitHub OIDC provider in the account.
+
+   For AI enrichment, first subscribe to **Claude Platform on AWS** in the AWS Console and create a workspace in
+   the same region, then put its ID (`wrkspc_…`) in `anthropicWorkspaceId`. Setup turns on the account's
+   outbound web identity federation (off by default; Claude Platform on AWS needs it) and sets the
+   `ANTHROPIC_AWS_WORKSPACE_ID` variable. Leave it empty to deploy without enrichment.
+
+3. In GitHub → Settings → Environments → **`production`** (`--github` creates it), optionally add yourself as a
+   required reviewer to approve each deploy. The variables below come from setup; add the secrets yourself
+   with `gh secret set NAME --env production` or in the web UI:
+
+   | Variable | Value |
+   | --- | --- |
+   | `AWS_REGION` | `region` from config.json |
+   | `AWS_DEPLOY_ROLE_ARN` | output `DeployRoleArn` |
+   | `SAM_ARTIFACTS_BUCKET` | output `ArtifactsBucketName` |
+   | `SITE_BUCKET` | output `SiteBucketName` |
+   | `CLOUDFRONT_DISTRIBUTION_ID` | output `DistributionId` |
+   | `SITE_URL` | output `SiteUrl` |
+   | `API_STACK_NAME` | `apiStackName` from config.json |
+   | `ANTHROPIC_AWS_WORKSPACE_ID` | `anthropicWorkspaceId` from config.json (optional; enables AI enrichment) |
+   | `ALLOWED_ORIGINS` | optional, set by hand: comma-separated CORS origins (defaults to `SITE_URL`) |
+   | `VITE_PUBLIC_PHONE`, `VITE_PUBLIC_EMAIL` | set by hand: contact details shown on the site |
+
+   | Secret | Value |
+   | --- | --- |
+   | `DATABASE_URL` | production Postgres URL (used for migrations and by the Lambda) |
+   | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | optional |
+
+4. Run **Backend**, then **Web**, once from the Actions tab ("Run workflow"). After that, merging to `main`
+   deploys automatically. The web build reads the API URL and Cognito client ID from the API stack, so
+   there's nothing to copy by hand.
+
+**Notes**
+
+- Migrations run from the GitHub runner, so the database must accept TLS connections from the internet
+  (append `?sslmode=require` to `DATABASE_URL`). If the database is private to a VPC, run the backend
+  deploy job on an [AWS CodeBuild-hosted runner](https://docs.aws.amazon.com/codebuild/latest/userguide/action-runner.html)
+  inside that VPC instead of `ubuntu-latest`.
+- Migrations apply before the new Lambda code ships. Keep them backward compatible: add a column in one
+  release, and drop the old one in a later release.
+- Old hashed JS/CSS files stay in the bucket after a deploy, so open tabs can still load their route chunks.
+- If you rename the API stack or the repo, update `infra/config.json` and re-run setup with `--github`.
 
 ## Tests
 

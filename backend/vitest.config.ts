@@ -18,6 +18,9 @@ export default defineConfig({
     env: {
       DATABASE_URL: testDatabaseUrl,
       DATABASE_SSL: 'false',
+      // Enrichment is on in tests; the Claude Platform on AWS client itself is mocked.
+      ANTHROPIC_AWS_WORKSPACE_ID: 'wrkspc_test',
+      AWS_REGION: 'us-east-1',
     },
   },
 })

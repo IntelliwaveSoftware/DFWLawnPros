@@ -17,7 +17,7 @@ export function GetQuote() {
           <p className="eyebrow text-gold-soft">Request a consultation</p>
           <h1 className="mt-3 max-w-2xl text-4xl sm:text-5xl">Tell us about your project</h1>
           <p className="mt-4 max-w-2xl text-white/80">
-            Two minutes is all it takes. We’ll match you with a vetted local landscaping company that serves your area and
+            Two minutes is all it takes. We’ll match you with a trusted local landscaping company that serves your area and
             specializes in your project.
           </p>
         </div>

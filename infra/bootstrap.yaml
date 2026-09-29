@@ -1,0 +1,335 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  DFW Lawn Pros — one-time setup for continuous deployment: website hosting (private S3 + CloudFront),
+  a bucket for Lambda deploy artifacts, and the IAM role GitHub Actions assumes via OIDC (no stored AWS keys).
+
+# Deploy with `node infra/setup.mjs`, which reads infra/config.json, decides for each bucket whether to
+# reuse an existing one or create it here, and fills in the parameters below. The GitHub workflows then
+# deploy the API stack and the site on every push to main.
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Default: IntelliwaveSoftware/DFWLawnPros
+    Description: owner/repo allowed to assume the deploy role
+  GitHubEnvironment:
+    Type: String
+    Default: production
+    Description: Only workflow jobs running in this GitHub environment can assume the deploy role
+  ApiStackName:
+    Type: String
+    Default: dfwlawnpros-api
+    Description: Stack name the backend workflow deploys backend/template.yaml to
+  CreateOidcProvider:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: Set to false if this AWS account already has the token.actions.githubusercontent.com provider
+  SiteBucketName:
+    Type: String
+    Default: ''
+    Description: Website bucket name. Empty with CreateSiteBucket=true lets CloudFormation generate one.
+  CreateSiteBucket:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: false = SiteBucketName already exists (same account and region) and is reused
+  ManageSiteBucketPolicy:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: >-
+      false = the reused bucket already has a bucket policy; add the SiteBucketPolicyStatement output to it
+      yourself (CloudFormation would otherwise replace the whole policy)
+  ArtifactsBucketName:
+    Type: String
+    Default: ''
+    Description: Lambda deploy-artifacts bucket name. Empty with CreateArtifactsBucket=true lets CloudFormation generate one.
+  CreateArtifactsBucket:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: false = ArtifactsBucketName already exists (same account and region) and is reused
+  DomainNames:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: Optional custom domains, e.g. dfwlawnpros.com,www.dfwlawnpros.com (requires CertificateArn)
+  CertificateArn:
+    Type: String
+    Default: ''
+    Description: Optional ACM certificate in us-east-1 covering DomainNames
+
+Rules:
+  ReusedSiteBucketNeedsName:
+    RuleCondition: !Equals [!Ref CreateSiteBucket, 'false']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref SiteBucketName, '']]
+        AssertDescription: SiteBucketName is required when CreateSiteBucket is false
+  ReusedArtifactsBucketNeedsName:
+    RuleCondition: !Equals [!Ref CreateArtifactsBucket, 'false']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref ArtifactsBucketName, '']]
+        AssertDescription: ArtifactsBucketName is required when CreateArtifactsBucket is false
+
+Conditions:
+  CreateOidc: !Equals [!Ref CreateOidcProvider, 'true']
+  HasDomain: !Not [!Equals [!Ref CertificateArn, '']]
+  CreateSite: !Equals [!Ref CreateSiteBucket, 'true']
+  NamedSite: !Not [!Equals [!Ref SiteBucketName, '']]
+  ManageSitePolicy: !Or [!Condition CreateSite, !Equals [!Ref ManageSiteBucketPolicy, 'true']]
+  KeepExistingSitePolicy: !Not [!Condition ManageSitePolicy]
+  CreateArtifacts: !Equals [!Ref CreateArtifactsBucket, 'true']
+  NamedArtifacts: !Not [!Equals [!Ref ArtifactsBucketName, '']]
+
+Resources:
+  # ---------------------------------------------------------------- Website
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateSite
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !If [NamedSite, !Ref SiteBucketName, !Ref AWS::NoValue]
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: ManageSitePolicy
+    Properties:
+      Bucket: !If [CreateSite, !Ref SiteBucket, !Ref SiteBucketName]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: CloudFrontReadOnly
+            Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !If
+              - CreateSite
+              - !Sub ${SiteBucket.Arn}/*
+              - !Sub arn:aws:s3:::${SiteBucketName}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${AWS::StackName}-site
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # Single-page app: client routes (/portfolio, /admin/leads/…) have no file extension, so serve index.html.
+  # Unlike a 403/404 custom error response, real missing assets still return an error.
+  SpaRewriteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub ${AWS::StackName}-spa-rewrite
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Serve index.html for client-side routes
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var last = request.uri.split('/').pop();
+          if (last.indexOf('.') === -1) request.uri = '/index.html';
+          return request;
+        }
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: DFW Lawn Pros website
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100
+        DefaultRootObject: index.html
+        Aliases: !If [HasDomain, !Ref DomainNames, !Ref AWS::NoValue]
+        ViewerCertificate: !If
+          - HasDomain
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+        Origins:
+          - Id: site
+            # A reused bucket must be in this stack's region (setup.mjs checks).
+            DomainName: !If
+              - CreateSite
+              - !GetAtt SiteBucket.RegionalDomainName
+              - !Sub ${SiteBucketName}.s3.${AWS::Region}.amazonaws.com
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          # AWS managed policies: CachingOptimized, SecurityHeadersPolicy
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SpaRewriteFunction.FunctionMetadata.FunctionARN
+
+  # ---------------------------------------------------------------- Deploy artifacts
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateArtifacts
+    Properties:
+      BucketName: !If [NamedArtifacts, !Ref ArtifactsBucketName, !Ref AWS::NoValue]
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-packages
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # ---------------------------------------------------------------- GitHub Actions
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOidc
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      cfn-lint:
+        config:
+          # The linter resolves the bucket-name parameters to their '' defaults; Rules forbid '' for reused buckets.
+          ignore_checks: [W1031]
+    Properties:
+      Description: Assumed by GitHub Actions to deploy the DFW Lawn Pros API and website
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateOidc
+                - !Ref GitHubOidcProvider
+                - !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepo}:environment:${GitHubEnvironment}
+      Policies:
+        - PolicyName: deploy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # API stack (SAM → CloudFormation). CloudFormation acts with this role's permissions.
+              - Effect: Allow
+                Action: cloudformation:*
+                Resource:
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ApiStackName}/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
+              - Effect: Allow
+                Action: [cloudformation:ValidateTemplate, cloudformation:GetTemplateSummary, cloudformation:ListStacks]
+                Resource: '*'
+              - Effect: Allow
+                Action: lambda:*
+                Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ApiStackName}-*
+              - Effect: Allow
+                Action: apigateway:*
+                Resource:
+                  - !Sub arn:aws:apigateway:${AWS::Region}::/apis
+                  - !Sub arn:aws:apigateway:${AWS::Region}::/apis/*
+                  - !Sub arn:aws:apigateway:${AWS::Region}::/tags/*
+              # CreateUserPool can't be scoped to a resource ARN.
+              - Effect: Allow
+                Action: cognito-idp:*
+                Resource: '*'
+              # Only roles CloudFormation names after the API stack (e.g. the function's execution role).
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:PassRole
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/${ApiStackName}-*
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject]
+                Resource: !If
+                  - CreateArtifacts
+                  - !Sub ${ArtifactsBucket.Arn}/*
+                  - !Sub arn:aws:s3:::${ArtifactsBucketName}/*
+              - Effect: Allow
+                Action: [s3:ListBucket, s3:GetBucketLocation]
+                Resource: !If
+                  - CreateArtifacts
+                  - !GetAtt ArtifactsBucket.Arn
+                  - !Sub arn:aws:s3:::${ArtifactsBucketName}
+              # Website
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject, s3:DeleteObject]
+                Resource: !If
+                  - CreateSite
+                  - !Sub ${SiteBucket.Arn}/*
+                  - !Sub arn:aws:s3:::${SiteBucketName}/*
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !If
+                  - CreateSite
+                  - !GetAtt SiteBucket.Arn
+                  - !Sub arn:aws:s3:::${SiteBucketName}
+              - Effect: Allow
+                Action: [cloudfront:CreateInvalidation, cloudfront:GetInvalidation]
+                Resource: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+
+Outputs:
+  DeployRoleArn:
+    Description: GitHub variable AWS_DEPLOY_ROLE_ARN
+    Value: !GetAtt DeployRole.Arn
+  ArtifactsBucketName:
+    Description: GitHub variable SAM_ARTIFACTS_BUCKET
+    Value: !If [CreateArtifacts, !Ref ArtifactsBucket, !Ref ArtifactsBucketName]
+  SiteBucketName:
+    Description: GitHub variable SITE_BUCKET
+    Value: !If [CreateSite, !Ref SiteBucket, !Ref SiteBucketName]
+  DistributionId:
+    Description: GitHub variable CLOUDFRONT_DISTRIBUTION_ID
+    Value: !Ref Distribution
+  SiteUrl:
+    Description: GitHub variable SITE_URL (the backend's CORS origin and Stripe redirect base)
+    Value: !If
+      - HasDomain
+      - !Sub
+        - https://${Domain}
+        - Domain: !Select [0, !Ref DomainNames]
+      - !Sub https://${Distribution.DomainName}
+  SiteBucketPolicyStatement:
+    Condition: KeepExistingSitePolicy
+    Description: Add this statement to the reused site bucket's policy so CloudFront can read it
+    Value: !Sub >-
+      {"Sid":"CloudFrontReadOnly","Effect":"Allow","Principal":{"Service":"cloudfront.amazonaws.com"},
+      "Action":"s3:GetObject","Resource":"arn:aws:s3:::${SiteBucketName}/*",
+      "Condition":{"StringEquals":{"AWS:SourceArn":"arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}"}}}

@@ -2,7 +2,7 @@
 //
 // Output is stored in lead_enrichments and always labelled AI-derived. The prompt forbids
 // inventing facts the customer did not state (e.g. a budget), and every inferred field is nullable.
-import Anthropic from '@anthropic-ai/sdk'
+import AnthropicAws from '@anthropic-ai/aws-sdk'
 import { getBudget, getTimeframe, SERVICES } from './config.js'
 import { addEvent, db, type Prisma } from './db.js'
 import { rescore } from './scoring.js'
@@ -10,8 +10,16 @@ import { rescore } from './scoring.js'
 const MODEL = process.env.ENRICHMENT_MODEL ?? 'claude-opus-5'
 const SERVICE_KEYS = SERVICES.map((s) => s.key)
 
-let client: Anthropic | undefined
-const anthropic = () => (client ??= new Anthropic()) // reads ANTHROPIC_API_KEY
+/**
+ * Claude Platform on AWS: requests are signed with the caller's AWS credentials (the Lambda's IAM role,
+ * or your SSO profile locally), so there is no API key to store. Region and workspace come from
+ * AWS_REGION and ANTHROPIC_AWS_WORKSPACE_ID.
+ */
+let client: AnthropicAws | undefined
+const anthropic = () => (client ??= new AnthropicAws())
+
+/** Without a workspace, leads are still accepted and scored; they just aren't enriched. */
+export const enrichmentConfigured = () => Boolean(process.env.ANTHROPIC_AWS_WORKSPACE_ID)
 
 export interface Extraction {
   services: string[]
@@ -107,12 +115,14 @@ export async function enrichLead(leadId: string): Promise<void> {
   if (!lead) return
 
   let data: Awaited<ReturnType<typeof extract>> = null
-  try {
-    data = await extract(lead)
-  } catch (error) {
-    // Enrichment is best-effort: an API outage, a missing ANTHROPIC_API_KEY (the SDK throws a
-    // plain Error, not an APIError) or a malformed response must never block the lead.
-    console.error(`enrichment failed for lead ${leadId}`, error)
+  if (enrichmentConfigured()) {
+    try {
+      data = await extract(lead)
+    } catch (error) {
+      // Enrichment is best-effort: an API outage, missing IAM permission, disabled outbound identity
+      // federation or a malformed response must never block the lead.
+      console.error(`enrichment failed for lead ${leadId}`, error)
+    }
   }
 
   if (data) {

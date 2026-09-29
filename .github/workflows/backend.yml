@@ -1,0 +1,113 @@
+# Tests the API on every pull request; on main, migrates the database and deploys the Lambda stack.
+name: Backend
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**', 'shared/**', '.github/workflows/backend.yml']
+  pull_request:
+    paths: ['backend/**', 'shared/**', '.github/workflows/backend.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  # Never interrupt a deploy halfway through a migration or CloudFormation update.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dfwlp
+          POSTGRES_PASSWORD: dfwlp_dev_only
+          POSTGRES_DB: dfwlp
+        ports: ['55432:5432']
+        options: >-
+          --health-cmd "pg_isready -U dfwlp"
+          --health-interval 2s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      STACK_NAME: ${{ vars.API_STACK_NAME || 'dfwlawnpros-api' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Migrations run before the new code ships, so keep them backward compatible
+      # (add columns first, drop them in a later release).
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Deploy API stack
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_AWS_WORKSPACE_ID: ${{ vars.ANTHROPIC_AWS_WORKSPACE_ID }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || vars.SITE_URL }}
+        run: |
+          params=(
+            "DatabaseUrl=$DATABASE_URL"
+            "SiteUrl=$SITE_URL"
+            "AllowedOrigins=$ALLOWED_ORIGINS"
+          )
+          # Optional: without a workspace, leads are scored but not AI-enriched.
+          [ -n "$ANTHROPIC_AWS_WORKSPACE_ID" ] && params+=("AnthropicWorkspaceId=$ANTHROPIC_AWS_WORKSPACE_ID")
+          # Optional: without a Stripe key, purchases complete immediately (invoice offline).
+          [ -n "$STRIPE_SECRET_KEY" ] && params+=("StripeSecretKey=$STRIPE_SECRET_KEY")
+          [ -n "$STRIPE_WEBHOOK_SECRET" ] && params+=("StripeWebhookSecret=$STRIPE_WEBHOOK_SECRET")
+          sam deploy \
+            --template-file template.yaml \
+            --stack-name "$STACK_NAME" \
+            --s3-bucket "${{ vars.SAM_ARTIFACTS_BUCKET }}" \
+            --s3-prefix "$STACK_NAME" \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides "${params[@]}"

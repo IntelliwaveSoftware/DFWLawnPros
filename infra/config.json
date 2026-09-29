@@ -1,0 +1,18 @@
+{
+  "region": "us-east-1",
+  "stackName": "dfwlawnpros-bootstrap",
+  "apiStackName": "dfwlawnpros-api",
+  "anthropicWorkspaceId": "wrkspc_01CcxyxiRUVpnTWrLusTBTDX",
+  "github": {
+    "repo": "IntelliwaveSoftware/DFWLawnPros",
+    "environment": "production"
+  },
+  "buckets": {
+    "site": "dfwlawnpros.com",
+    "artifacts": "dfwlawnpros.backend.com"
+  },
+  "domain": {
+    "names": [],
+    "certificateArn": ""
+  }
+}

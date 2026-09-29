@@ -136,5 +136,7 @@ server.listen(PORT, HOST, () => {
   console.log(`DFW Lawn Pros API (local) → http://localhost:${PORT}`)
   console.log(`  ${ROUTES.length} routes · public: ${[...PUBLIC_ROUTES].join(', ')}`)
   console.log(`  auth: local dev tokens only · CORS: ${ALLOWED_ORIGINS.join(', ')}`)
-  if (!process.env.ANTHROPIC_API_KEY) console.log('  ANTHROPIC_API_KEY not set: AI enrichment is skipped (leads are still scored)')
+  if (!process.env.ANTHROPIC_AWS_WORKSPACE_ID) {
+    console.log('  ANTHROPIC_AWS_WORKSPACE_ID not set: AI enrichment is skipped (leads are still scored)')
+  }
 })
