@@ -16,6 +16,12 @@ Parameters:
     Type: String
     Default: production
     Description: Only workflow jobs running in this GitHub environment can assume the deploy role
+  GitHubSubjectPrefix:
+    Type: String
+    Default: ''
+    Description: >-
+      The repo's OIDC subject prefix as GitHub reports it (setup.mjs reads it), e.g.
+      repo:Owner@123/Repo@456 for immutable subjects. Empty means the classic repo:Owner/Repo.
   ApiStackName:
     Type: String
     Default: dfwlawnpros-api
@@ -73,6 +79,7 @@ Rules:
 
 Conditions:
   CreateOidc: !Equals [!Ref CreateOidcProvider, 'true']
+  HasSubjectPrefix: !Not [!Equals [!Ref GitHubSubjectPrefix, '']]
   HasDomain: !Not [!Equals [!Ref CertificateArn, '']]
   CreateSite: !Equals [!Ref CreateSiteBucket, 'true']
   NamedSite: !Not [!Equals [!Ref SiteBucketName, '']]
@@ -232,7 +239,9 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepo}:environment:${GitHubEnvironment}
+                token.actions.githubusercontent.com:sub: !Sub
+                  - ${Prefix}:environment:${GitHubEnvironment}
+                  - Prefix: !If [HasSubjectPrefix, !Ref GitHubSubjectPrefix, !Sub 'repo:${GitHubRepo}']
       Policies:
         - PolicyName: deploy
           PolicyDocument:

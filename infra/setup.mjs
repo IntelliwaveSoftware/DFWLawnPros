@@ -129,6 +129,21 @@ function planOidc(stack) {
   return !res.OpenIDConnectProviderList.some((p) => p.Arn.endsWith(`/${OIDC_URL}`))
 }
 
+/**
+ * The subject GitHub puts in this repo's OIDC tokens. Newer repos use immutable subjects that embed the
+ * owner and repo IDs (repo:Owner@123/Repo@456), which a role trusting repo:Owner/Repo would reject.
+ */
+function githubSubjectPrefix() {
+  try {
+    const res = JSON.parse(run('gh', ['api', `repos/${github.repo}/actions/oidc/customization/sub`]))
+    if (res.sub_claim_prefix) return res.sub_claim_prefix
+  } catch {
+    // gh missing or signed out: fall through to the classic format.
+  }
+  console.warn(`  (could not read the OIDC subject format from GitHub; assuming repo:${github.repo})`)
+  return ''
+}
+
 /** Claude Platform on AWS mints an identity token for each request, which needs this account setting. */
 function federationEnabled() {
   const res = aws('iam', 'get-outbound-web-identity-federation-info')
@@ -180,11 +195,13 @@ function main() {
     throw new SetupError(`anthropicWorkspaceId "${anthropicWorkspaceId}" should look like wrkspc_01AbCd…`)
   }
   const federation = anthropicWorkspaceId ? federationEnabled() : null
+  const subjectPrefix = githubSubjectPrefix()
 
   console.log(`  site bucket       ${site.actual} — ${site.note}`)
   console.log(`  artifacts bucket  ${artifacts.actual} — ${artifacts.note}`)
   if (!manageSitePolicy) console.log('  site bucket policy  already exists; you add the CloudFront statement (printed below)')
   console.log(`  GitHub OIDC provider  ${createOidc ? 'managed by this stack' : 'already exists, reused'}`)
+  console.log(`  GitHub token subject  ${subjectPrefix || `repo:${github.repo}`}:environment:${github.environment}`)
   if (!anthropicWorkspaceId) console.log('  AI enrichment         off (no anthropicWorkspaceId in config.json)')
   else console.log(`  AI enrichment         workspace ${anthropicWorkspaceId}; outbound identity federation ${federation ? 'already on' : 'will be turned on'}`)
   console.log('')
@@ -198,6 +215,7 @@ function main() {
   const params = {
     GitHubRepo: github.repo,
     GitHubEnvironment: github.environment,
+    GitHubSubjectPrefix: subjectPrefix,
     ApiStackName: apiStackName,
     CreateOidcProvider: String(createOidc),
     SiteBucketName: site.name,
