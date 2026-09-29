@@ -213,7 +213,14 @@ GitHub gets short-lived AWS credentials through OIDC; no AWS keys are stored in 
 Allen, Prosper, Celina, Richardson, Garland) so the headline matches the ad, e.g.
 `/lawn-quote?service=artificial-turf&city=fort-worth`. Lawn care and turf open the instant quote in place with that
 service pre-selected; landscaping sends visitors to the project form with the city filled in. Variants and copy live
-in `web/src/content/landing.ts`.
+in `web/src/content/landing.ts`. A short "call me back" form further down the page serves visitors who won't use the
+map.
+
+The hero backdrop is our own aerial image of the metro (USGS/USDA NAIP, public domain), so page load makes no
+Amazon Location requests. It is framed exactly like the live map's opening view; after an address is picked, the live
+map loads behind it, cross-fades in and flies to the home. Regenerate it with `cd web && node
+scripts/fetch-hero-backdrop.mjs` (keep its center and zoom in sync with `BACKDROP` in `landing.ts`, and retune
+`BACKDROP.filter` if the live imagery's color changes).
 
 **Maps:** address search and satellite imagery use Amazon Location Service (Places v2 and Maps v2). The API stack
 creates a browser key (`MapsKey`) limited to tile and place reads from the site's origins and localhost; the Web

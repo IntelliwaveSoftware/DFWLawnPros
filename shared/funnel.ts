@@ -10,7 +10,7 @@ export const FUNNEL_STEPS = [
 ] as const
 
 /** Other events worth recording that aren't steps of the instant-quote funnel. */
-export const OTHER_EVENTS = ['lead_form_submitted', 'call_clicked'] as const
+export const OTHER_EVENTS = ['lead_form_submitted', 'callback_submitted', 'call_clicked'] as const
 
 export type FunnelStep = (typeof FUNNEL_STEPS)[number][0]
 export type TrackedEvent = FunnelStep | (typeof OTHER_EVENTS)[number]

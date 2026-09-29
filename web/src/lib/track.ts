@@ -42,7 +42,7 @@ function sessionId(): string {
 }
 let memorySession: string | undefined
 
-const CONVERSIONS: TrackedEvent[] = ['quote_submitted', 'lead_form_submitted']
+const CONVERSIONS: TrackedEvent[] = ['quote_submitted', 'lead_form_submitted', 'callback_submitted']
 
 export function track(event: TrackedEvent) {
   const params = { page: context.page, service: context.service, city: context.city }

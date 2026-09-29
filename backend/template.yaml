@@ -140,7 +140,6 @@ Resources:
       Restrictions:
         AllowActions:
           - geo-maps:GetTile
-          - geo-maps:GetStaticMap
           - geo-places:Autocomplete
           - geo-places:GetPlace
         AllowResources:

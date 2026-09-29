@@ -67,19 +67,3 @@ export function useSatelliteSource(): SatelliteSource | null {
   return source
 }
 
-/**
- * A static satellite image (Amazon Location GetStaticMap) for decorative use, e.g. the landing hero.
- * Returns null without a key so callers can fall back to a photo.
- */
-export function staticSatelliteUrl([lat, lng]: [number, number], zoom: number, width: number, height: number): string | null {
-  if (!AWS_LOCATION_KEY) return null
-  const params = new URLSearchParams({
-    style: 'Satellite',
-    center: `${lng},${lat}`,
-    zoom: String(zoom),
-    width: String(Math.min(width, 1400)),
-    height: String(Math.min(height, 1400)),
-    key: AWS_LOCATION_KEY,
-  })
-  return `https://maps.geo.${AWS_LOCATION_REGION}.amazonaws.com/v2/static/map?${params}`
-}

@@ -1,7 +1,7 @@
 import L from 'leaflet'
 import { useEffect } from 'react'
 import { MapContainer, Marker, Polygon, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet'
-import type { LatLng } from './geometry'
+import { HOME_ZOOM, type LatLng } from './geometry'
 import { useSatelliteSource } from './satellite'
 
 const handle = (size: number, fill: string, border: string) =>
@@ -39,7 +39,8 @@ const homeIcon = L.divIcon({
   iconAnchor: [15, 30],
 })
 
-function SatelliteLayer() {
+/** Satellite imagery (AWS or the development fallback). `onLoad` fires once the visible tiles have loaded. */
+export function SatelliteLayer({ onLoad }: { onLoad?: () => void }) {
   const source = useSatelliteSource()
   if (!source) return null
   // 512px tiles cover a 256px tile's area one zoom level up; zoomOffset keeps Leaflet's zoom levels aligned.
@@ -53,6 +54,7 @@ function SatelliteLayer() {
       zoomOffset={large ? -1 : 0}
       maxNativeZoom={large ? source.maxNativeZoom + 1 : source.maxNativeZoom}
       maxZoom={21}
+      eventHandlers={onLoad ? { load: onLoad } : undefined}
     />
   )
 }
@@ -65,7 +67,7 @@ function ClickCapture({ onClick }: { onClick: (p: LatLng) => void }) {
 function Recenter({ center }: { center: LatLng }) {
   const map = useMap()
   useEffect(() => {
-    map.setView(center, 20)
+    map.setView(center, HOME_ZOOM)
   }, [center, map])
   return null
 }
@@ -97,7 +99,7 @@ export function LawnMap({
   return (
     <MapContainer
       center={center}
-      zoom={20}
+      zoom={HOME_ZOOM}
       maxZoom={21}
       className="size-full"
       zoomControl

@@ -1,6 +1,20 @@
 // Ad landing page (/lawn-quote) variants. Ads link with ?service=…&city=… so the headline matches the ad
 // (e.g. /lawn-quote?service=artificial-turf&city=frisco). Unknown values fall back to the generic page.
 
+/**
+ * The hero's metro backdrop: our own NAIP aerial image (public domain, see scripts/fetch-hero-backdrop.mjs),
+ * framed exactly like the live map's opening view so the page can cross-fade into it and fly to the
+ * customer's home. `width` is the image's CSS width at this zoom; change these only together with the script.
+ */
+export const BACKDROP = {
+  center: [32.95, -97.0] as [number, number],
+  zoom: 10,
+  wide: { src: '/images/dfw-metro-wide.jpg', width: 1920 },
+  tall: { src: '/images/dfw-metro-tall.jpg', width: 780 },
+  /** Color correction so the aerial image's tone matches the live satellite tiles it cross-fades into. */
+  filter: 'saturate(1.35) contrast(1.12) brightness(0.88)',
+}
+
 export const LANDING_CITIES = [
   'Dallas', 'Fort Worth', 'Plano', 'Frisco', 'McKinney', 'Allen', 'Prosper', 'Celina', 'Richardson', 'Garland',
 ]
