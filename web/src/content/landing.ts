@@ -11,8 +11,11 @@ export const BACKDROP = {
   zoom: 11,
   wide: { src: '/images/dfw-metro-wide.jpg', width: 2560 },
   tall: { src: '/images/dfw-metro-tall.jpg', width: 780 },
-  /** Color correction so the aerial image's tone matches the live satellite tiles it cross-fades into. */
-  filter: 'saturate(1.35) contrast(1.12) brightness(0.88)',
+  /**
+   * Color correction so the aerial image's tone matches the live AWS satellite tiles it cross-fades into.
+   * Fitted by comparing per-channel color statistics of both at the same framing; refit if the imagery changes.
+   */
+  filter: 'brightness(1.1) saturate(1.8) contrast(1.1) hue-rotate(8deg)',
 }
 
 export const LANDING_CITIES = [
