@@ -3,7 +3,7 @@
 import { AUTH_MODE } from '@/config/env'
 import { mockSignIn, mockSignUp } from '@/api/mock/mockAuth'
 import type { Role } from '@/lib/types'
-import { cognitoConfirm, cognitoRefresh, cognitoSignIn, cognitoSignUp } from './cognito'
+import { cognitoCompleteNewPassword, cognitoConfirm, cognitoRefresh, cognitoSignIn, cognitoSignUp } from './cognito'
 import { localSignIn } from './localAuth'
 import { loadSession, saveSession, type Session } from './session'
 
@@ -50,6 +50,15 @@ export async function signIn(email: string, password: string, role: Role = 'cont
       : AUTH_MODE === 'local'
         ? localSignIn(email, role, name)
         : await cognitoSignIn(email, password)
+  set(session)
+  return session
+}
+
+export { NewPasswordRequiredError } from './cognito'
+
+/** Second step of an invited user's first sign-in (see NewPasswordRequiredError). */
+export async function completeNewPassword(email: string, newPassword: string, challengeSession: string) {
+  const session = await cognitoCompleteNewPassword(email, newPassword, challengeSession)
   set(session)
   return session
 }

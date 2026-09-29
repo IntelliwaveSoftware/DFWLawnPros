@@ -87,6 +87,8 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_AWS_WORKSPACE_ID: ${{ vars.ANTHROPIC_AWS_WORKSPACE_ID }}
+          # A secret rather than a variable: this repo is public, and variables appear in its Actions logs.
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           SITE_URL: ${{ vars.SITE_URL }}
@@ -97,6 +99,8 @@ jobs:
             "SiteUrl=$SITE_URL"
             "AllowedOrigins=$ALLOWED_ORIGINS"
           )
+          # Optional: the first dashboard admin, invited by email on the deploy that adds it.
+          [ -n "$ADMIN_EMAIL" ] && params+=("AdminEmail=$ADMIN_EMAIL")
           # Optional: without a workspace, leads are scored but not AI-enriched.
           [ -n "$ANTHROPIC_AWS_WORKSPACE_ID" ] && params+=("AnthropicWorkspaceId=$ANTHROPIC_AWS_WORKSPACE_ID")
           # Optional: without a Stripe key, purchases complete immediately (invoice offline).

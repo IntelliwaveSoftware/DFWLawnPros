@@ -7,6 +7,13 @@ Parameters:
     Type: String
     NoEcho: true
     Description: postgresql://user:password@host:5432/dbname (RDS / Aurora PostgreSQL)
+  AdminEmail:
+    Type: String
+    Default: ''
+    AllowedPattern: '^([^\s@]+@[^\s@]+\.[^\s@]+)?$'
+    Description: >-
+      First admin for the dashboard. Cognito emails them an invitation with a temporary password, which they
+      replace at first sign-in. Leave empty to create admins by hand. Removing it deletes that user.
   AnthropicWorkspaceId:
     Type: String
     Default: ''
@@ -35,6 +42,7 @@ Parameters:
     Default: claude-opus-5
 
 Conditions:
+  HasAdminEmail: !Not [!Equals [!Ref AdminEmail, '']]
   HasAnthropicWorkspace: !Not [!Equals [!Ref AnthropicWorkspaceId, '']]
 
 Globals:
@@ -59,6 +67,17 @@ Resources:
           RequireNumbers: true
           RequireSymbols: false
           RequireUppercase: false
+          TemporaryPasswordValidityDays: 7
+      # Contractors sign themselves up; admins are invited (see BootstrapAdmin) and set a password at first sign-in.
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+        InviteMessageTemplate:
+          EmailSubject: Your DFW Lawn Pros admin invitation
+          EmailMessage: !Sub >-
+            You've been invited to the DFW Lawn Pros admin dashboard.<br><br>
+            Sign in at ${SiteUrl}/login?role=admin with your email {username} and this temporary password:
+            <b>{####}</b><br><br>
+            You'll choose your own password the first time you sign in. The temporary password expires in 7 days.
       Schema:
         - Name: name
           AttributeDataType: String
@@ -84,6 +103,28 @@ Resources:
       GroupName: admin
       UserPoolId: !Ref UserPool
       Description: Internal staff with access to the admin dashboard
+
+  # The first dashboard admin, invited by email. More admins can be added by hand (see README).
+  BootstrapAdmin:
+    Type: AWS::Cognito::UserPoolUser
+    Condition: HasAdminEmail
+    Properties:
+      UserPoolId: !Ref UserPool
+      Username: !Ref AdminEmail
+      DesiredDeliveryMediums: [EMAIL]
+      UserAttributes:
+        - Name: email
+          Value: !Ref AdminEmail
+        - Name: email_verified
+          Value: 'true'
+
+  BootstrapAdminMembership:
+    Type: AWS::Cognito::UserPoolUserToGroupAttachment
+    Condition: HasAdminEmail
+    Properties:
+      UserPoolId: !Ref UserPool
+      GroupName: !Ref AdminGroup
+      Username: !Ref BootstrapAdmin
 
   # ---------------------------------------------------------------- API
   HttpApi:

@@ -1,7 +1,8 @@
 import { Loader2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { signIn } from '@/auth/auth'
+import { completeNewPassword, NewPasswordRequiredError, signIn } from '@/auth/auth'
+import type { Session } from '@/auth/session'
 import { Logo } from '@/components/Logo'
 import { AUTH_MODE } from '@/config/env'
 import { DEMO_ADMIN, DEMO_CONTRACTOR } from '@/api/mock/seed'
@@ -16,18 +17,35 @@ export function Login() {
   const [password, setPassword] = useState(AUTH_MODE === 'mock' ? demo.password : '')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // Set when an invited user signs in with a temporary password and must choose their own.
+  const [challenge, setChallenge] = useState<string | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  function goHome(session: Session) {
+    const home = session.user.role === 'admin' ? '/admin' : '/contractor'
+    const next = params.get('next')
+    navigate(next && next.startsWith(home) ? next : home, { replace: true })
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
     try {
-      const session = await signIn(email, password, role)
-      const home = session.user.role === 'admin' ? '/admin' : '/contractor'
-      const next = params.get('next')
-      navigate(next && next.startsWith(home) ? next : home, { replace: true })
+      if (challenge) {
+        if (newPassword !== confirmPassword) throw new Error('The passwords don’t match.')
+        goHome(await completeNewPassword(email, newPassword, challenge))
+      } else {
+        goHome(await signIn(email, password, role))
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign in failed')
+      if (err instanceof NewPasswordRequiredError) {
+        setChallenge(err.session)
+        setPassword('')
+      } else {
+        setError(err instanceof Error ? err.message : 'Sign in failed')
+      }
     } finally {
       setLoading(false)
     }
@@ -41,16 +59,52 @@ export function Login() {
         </div>
         <form onSubmit={onSubmit} className="card space-y-4 p-8">
           <div>
-            <h1 className="text-2xl text-forest-900">{role === 'admin' ? 'Admin sign in' : 'Contractor sign in'}</h1>
+            <h1 className="text-2xl text-forest-900">
+              {challenge ? 'Choose your password' : role === 'admin' ? 'Admin sign in' : 'Contractor sign in'}
+            </h1>
             <p className="mt-1 text-sm text-muted">
-              {role === 'admin' ? 'Internal lead dashboard.' : 'Access your leads and company profile.'}
+              {challenge
+                ? `You signed in with a temporary password. Set your own to finish signing in as ${email}.`
+                : role === 'admin'
+                  ? 'Internal lead dashboard.'
+                  : 'Access your leads and company profile.'}
             </p>
           </div>
-          <label className="block">
-            <span className="label">Email</span>
-            <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </label>
-          {AUTH_MODE !== 'local' && (
+          {challenge ? (
+            <>
+              <label className="block">
+                <span className="label">New password</span>
+                <input
+                  className="input"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  autoFocus
+                />
+                <span className="mt-1 block text-xs text-muted">At least 8 characters, including a lowercase letter and a number.</span>
+              </label>
+              <label className="block">
+                <span className="label">Confirm new password</span>
+                <input
+                  className="input"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </label>
+            </>
+          ) : (
+            <label className="block">
+              <span className="label">Email</span>
+              <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </label>
+          )}
+          {!challenge && AUTH_MODE !== 'local' && (
             <label className="block">
               <span className="label">Password</span>
               <input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
@@ -58,7 +112,7 @@ export function Login() {
           )}
           {error && <p className="text-sm text-red-700">{error}</p>}
           <button className="btn-primary w-full" disabled={loading}>
-            {loading && <Loader2 className="size-4 animate-spin" />} Sign in
+            {loading && <Loader2 className="size-4 animate-spin" />} {challenge ? 'Set password and sign in' : 'Sign in'}
           </button>
           {AUTH_MODE === 'local' && (
             <p className="rounded-lg bg-sky-50 p-3 text-xs text-sky-900">

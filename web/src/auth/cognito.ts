@@ -29,16 +29,28 @@ function decodeJwt(token: string): Record<string, unknown> {
 interface AuthResult {
   AuthenticationResult?: { IdToken: string; RefreshToken?: string; ExpiresIn: number }
   ChallengeName?: string
+  Session?: string
+}
+
+/**
+ * Thrown when an invited user signs in with their temporary password. Finish with
+ * `cognitoCompleteNewPassword`, passing the challenge `session` back.
+ */
+export class NewPasswordRequiredError extends Error {
+  readonly session: string
+  constructor(session: string) {
+    super('Choose a new password to finish signing in.')
+    this.session = session
+  }
 }
 
 function toSession(result: AuthResult, refreshFallback?: string): Session {
   const auth = result.AuthenticationResult
   if (!auth) {
-    throw new Error(
-      result.ChallengeName === 'NEW_PASSWORD_REQUIRED'
-        ? 'A password change is required for this account. Contact an administrator.'
-        : 'Additional verification is required.',
-    )
+    if (result.ChallengeName === 'NEW_PASSWORD_REQUIRED' && result.Session) {
+      throw new NewPasswordRequiredError(result.Session)
+    }
+    throw new Error('Additional verification is required.')
   }
   const claims = decodeJwt(auth.IdToken)
   const groups = (claims['cognito:groups'] as string[] | undefined) ?? []
@@ -60,6 +72,15 @@ export async function cognitoSignIn(email: string, password: string) {
   const result = await call<AuthResult>('InitiateAuth', {
     AuthFlow: 'USER_PASSWORD_AUTH',
     AuthParameters: { USERNAME: email, PASSWORD: password },
+  })
+  return toSession(result)
+}
+
+export async function cognitoCompleteNewPassword(email: string, newPassword: string, session: string) {
+  const result = await call<AuthResult>('RespondToAuthChallenge', {
+    ChallengeName: 'NEW_PASSWORD_REQUIRED',
+    Session: session,
+    ChallengeResponses: { USERNAME: email, NEW_PASSWORD: newPassword },
   })
   return toSession(result)
 }

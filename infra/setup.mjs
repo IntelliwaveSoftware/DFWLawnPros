@@ -171,7 +171,8 @@ function setGithubVariables(outputs) {
     runOrFail(`Setting ${name}`, 'gh', ['variable', 'set', name, '--repo', repo, '--env', env, '--body', value])
     console.log(`  set ${name}`)
   }
-  console.log(`\nStill to add by hand (secret): gh secret set DATABASE_URL --repo ${repo} --env ${env}`)
+  console.log(`\nStill to add by hand (secrets): gh secret set DATABASE_URL --repo ${repo} --env ${env}`)
+  console.log(`                                  gh secret set ADMIN_EMAIL --repo ${repo} --env ${env}   (optional: first admin)`)
 }
 
 function main() {

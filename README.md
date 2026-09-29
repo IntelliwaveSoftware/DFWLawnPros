@@ -107,8 +107,12 @@ VITE_COGNITO_REGION=<CognitoRegion>
 VITE_COGNITO_CLIENT_ID=<CognitoClientId>
 ```
 
-Create an admin: sign up a user in the Cognito pool, then
-`aws cognito-idp admin-add-user-to-group --user-pool-id <UserPoolId> --username you@company.com --group-name admin`.
+**Admins.** Pass `AdminEmail` (the pipeline uses the `ADMIN_EMAIL` secret) and the stack creates that user in the
+`admin` group. Cognito emails them a temporary password; at first sign-in on `/login?role=admin` the site asks them
+to choose their own. If the invitation expires (7 days), resend it with
+`aws cognito-idp admin-create-user --user-pool-id <UserPoolId> --username <email> --message-action RESEND`.
+To add more admins, create a user the same way (`admin-create-user`, without `--message-action`), then
+`aws cognito-idp admin-add-user-to-group --user-pool-id <UserPoolId> --username <email> --group-name admin`.
 Contractors self-register at `/contractor/signup`.
 
 **Payments:** leave `StripeSecretKey` empty and purchases complete immediately (invoice offline). Set it (plus
@@ -184,6 +188,7 @@ GitHub gets short-lived AWS credentials through OIDC; no AWS keys are stored in 
    | Secret | Value |
    | --- | --- |
    | `DATABASE_URL` | production Postgres URL (used for migrations and by the Lambda) |
+   | `ADMIN_EMAIL` | optional: the first dashboard admin, invited by email on the next deploy. A secret because this repo is public and variables appear in Actions logs. |
    | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | optional |
 
 4. Run **Backend**, then **Web**, once from the Actions tab ("Run workflow"). After that, merging to `main`
