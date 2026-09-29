@@ -126,6 +126,33 @@ Resources:
       GroupName: !Ref AdminGroup
       Username: !Ref BootstrapAdmin
 
+  # ---------------------------------------------------------------- Maps
+  # Browser key for the quote map: satellite tiles and address search (Amazon Location v2).
+  # Public by design, so it can only read tiles and places, and only from the site's origins.
+  MapsKey:
+    Type: AWS::Location::APIKey
+    Properties:
+      KeyName: !Sub ${AWS::StackName}-web-maps
+      Description: DFW Lawn Pros website - satellite tiles and address search
+      NoExpiry: true
+      ForceUpdate: true
+      ForceDelete: true
+      Restrictions:
+        AllowActions:
+          - geo-maps:GetTile
+          - geo-maps:GetStaticMap
+          - geo-places:Autocomplete
+          - geo-places:GetPlace
+        AllowResources:
+          - !Sub arn:aws:geo-maps:${AWS::Region}::provider/default
+          - !Sub arn:aws:geo-places:${AWS::Region}::provider/default
+        # Each allowed origin + local development (at most 5 entries).
+        AllowReferers: !Split
+          - ','
+          - !Sub
+            - '${Origins}/*,http://localhost:5173/*,http://127.0.0.1:5173/*'
+            - Origins: !Join ['/*,', !Ref AllowedOrigins]
+
   # ---------------------------------------------------------------- API
   HttpApi:
     Type: AWS::Serverless::HttpApi
@@ -143,6 +170,10 @@ Resources:
         GET /warmup:
           ThrottlingBurstLimit: 10
           ThrottlingRateLimit: 5
+        # A handful of funnel steps per visitor; well above real traffic, far below abuse.
+        POST /events:
+          ThrottlingBurstLimit: 20
+          ThrottlingRateLimit: 10
       Auth:
         DefaultAuthorizer: CognitoJwt
         Authorizers:
@@ -201,6 +232,14 @@ Resources:
             ApiId: !Ref HttpApi
             Method: GET
             Path: /warmup
+            Auth:
+              Authorizer: NONE
+        TrackEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: POST
+            Path: /events
             Auth:
               Authorizer: NONE
         StripeWebhook:
@@ -315,3 +354,6 @@ Outputs:
     Value: !Ref UserPoolClient
   UserPoolId:
     Value: !Ref UserPool
+  MapsKeyName:
+    Description: Amazon Location API key the web build reads (aws location describe-key)
+    Value: !Ref MapsKey

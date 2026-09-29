@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router'
 import { api } from '@/api'
 import { BUDGETS, CONDITIONAL_QUESTIONS, SERVICES, TIMEFRAMES } from '@/lib/catalog'
 import { consentText, displayConsent, hasPhoneNumber } from '@/lib/consent'
+import { track } from '@/lib/track'
 import { getUtm } from '@/lib/utm'
 import type { ServiceKey } from '@/lib/types'
 
@@ -50,14 +51,14 @@ function Field({ label, error, children, className = '' }: { label: string; erro
   )
 }
 
-export function LeadForm({ defaultService = '' }: { defaultService?: ServiceKey | '' }) {
+export function LeadForm({ defaultService = '', defaultCity = '' }: { defaultService?: ServiceKey | ''; defaultCity?: string }) {
   const navigate = useNavigate()
   const [f, setF] = useState<FormState>({
     name: '',
     email: '',
     phone: '',
     zip_code: '',
-    city: '',
+    city: defaultCity,
     service: defaultService,
     budget: '',
     timeframe: '',
@@ -104,6 +105,7 @@ export function LeadForm({ defaultService = '' }: { defaultService?: ServiceKey 
         consent: { accepted: true, text: consent, timestamp: new Date().toISOString() },
         utm: getUtm(),
       })
+      track('lead_form_submitted')
       navigate(`/thank-you?ref=${encodeURIComponent(id)}`)
     } catch (err) {
       setServerError(err instanceof Error ? err.message : 'Something went wrong. Please try again or call us.')

@@ -108,6 +108,7 @@ export function buildSeed(rules: ScoringRules): MockDb {
     purchases: [],
     outcomes: [],
     events: [],
+    funnel_events: [],
     scoring_rules: rules,
   }
 
@@ -231,5 +232,14 @@ export function buildSeed(rules: ScoringRules): MockDb {
     }
   }
   d.leads.sort((a, b) => b.created_at.localeCompare(a.created_at))
+  // A believable month of instant-quote traffic so the admin funnel chart has something to show.
+  const steps = ['page_view', 'address_entered', 'lawn_measured', 'services_chosen', 'quote_submitted'] as const
+  const reached = [412, 238, 171, 139, 64]
+  for (let i = 0; i < reached[0]; i++) {
+    const created_at = new Date(now - (i % 30) * day - (i % 17) * 3_600_000).toISOString()
+    steps.forEach((event, s) => {
+      if (i < reached[s]) d.funnel_events.push({ event, page: i % 3 ? 'landing' : 'instant_quote', session_id: `demo${i}`, created_at })
+    })
+  }
   return d
 }

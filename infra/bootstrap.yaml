@@ -265,6 +265,16 @@ Resources:
                   - !Sub arn:aws:apigateway:${AWS::Region}::/apis
                   - !Sub arn:aws:apigateway:${AWS::Region}::/apis/*
                   - !Sub arn:aws:apigateway:${AWS::Region}::/tags/*
+              # The website's Amazon Location API key (created by the API stack). Granting a key an action
+              # requires the caller to hold that action too.
+              - Effect: Allow
+                Action: [geo:CreateKey, geo:DescribeKey, geo:UpdateKey, geo:DeleteKey, geo:TagResource, geo:UntagResource]
+                Resource: !Sub arn:aws:geo:${AWS::Region}:${AWS::AccountId}:api-key/${ApiStackName}-*
+              - Effect: Allow
+                Action: [geo-maps:GetTile, geo-maps:GetStaticMap, geo-places:Autocomplete, geo-places:GetPlace]
+                Resource:
+                  - !Sub arn:aws:geo-maps:${AWS::Region}::provider/default
+                  - !Sub arn:aws:geo-places:${AWS::Region}::provider/default
               # CreateUserPool can't be scoped to a resource ARN.
               - Effect: Allow
                 Action: cognito-idp:*

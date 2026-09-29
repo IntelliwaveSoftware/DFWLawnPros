@@ -10,6 +10,7 @@ import { dispatch, json, type Result, type Routes } from './http.js'
 import { paymentRoutes } from './payments.js'
 import { adminRoutes } from './routes/admin.js'
 import { contractorRoutes } from './routes/contractor.js'
+import { eventRoutes } from './routes/events.js'
 import { leadRoutes } from './routes/leads.js'
 
 /**
@@ -23,7 +24,7 @@ const warmupRoutes: Routes = {
   },
 }
 
-export const routes: Routes = { ...leadRoutes, ...adminRoutes, ...contractorRoutes, ...paymentRoutes, ...warmupRoutes }
+export const routes: Routes = { ...leadRoutes, ...adminRoutes, ...contractorRoutes, ...paymentRoutes, ...warmupRoutes, ...eventRoutes }
 
 type EnrichTask = { task: 'enrich'; lead_id: string }
 

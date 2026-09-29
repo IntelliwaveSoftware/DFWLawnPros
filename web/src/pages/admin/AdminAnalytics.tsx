@@ -19,13 +19,13 @@ function TooltipBox({ active, payload, label }: { active?: boolean; payload?: { 
   )
 }
 
-function HBar({ data, height = 260 }: { data: { label: string; count: number }[]; height?: number }) {
+function HBar({ data, height = 260, labelWidth = 120 }: { data: { label: string; count: number }[]; height?: number; labelWidth?: number }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }} barCategoryGap={4}>
         <CartesianGrid horizontal={false} stroke={GRID} />
         <XAxis type="number" tick={AXIS} axisLine={false} tickLine={false} allowDecimals={false} />
-        <YAxis type="category" dataKey="label" tick={AXIS} axisLine={false} tickLine={false} width={120} />
+        <YAxis type="category" dataKey="label" tick={AXIS} axisLine={false} tickLine={false} width={labelWidth} />
         <Tooltip content={<TooltipBox />} cursor={{ fill: 'rgba(31,61,43,0.06)' }} />
         <Bar dataKey="count" fill={INK} radius={[0, 4, 4, 0]} maxBarSize={22} isAnimationActive={false} />
       </BarChart>
@@ -61,6 +61,20 @@ export function AdminAnalytics() {
               <Bar dataKey="count" fill={INK} radius={[4, 4, 0, 0]} maxBarSize={18} />
             </BarChart>
           </ResponsiveContainer>
+        </Panel>
+        <Panel title="Instant quote funnel · visitors reaching each step, last 30 days">
+          {data.quote_funnel[0]?.count ? (
+            <HBar
+              labelWidth={170}
+              height={220}
+              data={data.quote_funnel.map((f) => ({
+                label: `${f.stage} · ${pct(f.count / data.quote_funnel[0].count)}`,
+                count: f.count,
+              }))}
+            />
+          ) : (
+            <p className="py-16 text-center text-sm text-muted">No quote-page visits recorded in the last 30 days.</p>
+          )}
         </Panel>
         <Panel title="Lifecycle funnel · leads reaching each stage">
           <HBar data={data.funnel.map((f) => ({ label: f.stage, count: f.count }))} />

@@ -13,6 +13,7 @@ the client is [`web/src/api/httpApi.ts`](../web/src/api/httpApi.ts). Money field
 | Method | Path | Body → Response |
 |---|---|---|
 | POST | `/leads` | `LeadSubmission` → `201 { id }`. Validates, stores, scores, then enriches asynchronously and re-scores. `phone` is optional; the consent text's version tag must match it (`2026-09-v1` with a phone, `2026-09-v3` without — see `shared/consent.ts`), otherwise `400`. |
+| POST | `/events` | `{ event, page, session_id, service?, city?, utm? }` → `204`. Anonymous quote-funnel step (names in `shared/funnel.ts`); stored once per session and step for the admin funnel chart. No personal data. Throttled to 10 requests/s. |
 | GET | `/warmup` | → `204`. Runs `SELECT 1` so the Lambda is warm and a paused Aurora resumes before a form submit. Called by the site on visitor activity, at most every 5 minutes per browser (`web/src/lib/warmup.ts`). Throttled to 5 requests/s. |
 | POST | `/webhooks/stripe` | Stripe event (signature-verified) → `200`. Completes/cancels pending purchases. |
 
@@ -24,6 +25,7 @@ the client is [`web/src/api/httpApi.ts`](../web/src/api/httpApi.ts). Money field
 | GET | `/admin/leads/{id}` | `LeadDetail` — lead, enrichment, purchases, outcomes, lifecycle events |
 | PATCH | `/admin/leads/{id}` | `{ status }` → `204`; logs a `status_changed` event |
 | GET | `/admin/analytics` | `Analytics` — totals, breakdowns, 30-day series, lifecycle funnel, contractor activity |
+| GET | `/admin/analytics` also returns | `quote_funnel`: instant-quote sessions reaching each step in the last 30 days |
 | GET | `/admin/contractors` | `Contractor[]`, applications awaiting review (`approved_at: null`) first |
 | PATCH | `/admin/contractors/{id}` | `{ approved: true }` approves an application (sets `approved_at`, `approved_by`); `{ active }` pauses or resumes an approved company → `204` |
 | GET | `/admin/scoring-rules` | Active `ScoringRules` (seeded from `shared/scoring-rules.json` on first call) |

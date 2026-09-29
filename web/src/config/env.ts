@@ -26,3 +26,17 @@ export const COGNITO_CLIENT_ID = env.VITE_COGNITO_CLIENT_ID ?? ''
 export const PUBLIC_PHONE = env.VITE_PUBLIC_PHONE || '(214) 555-0142'
 export const PUBLIC_EMAIL = env.VITE_PUBLIC_EMAIL || 'hello@dfwlawnpros.com'
 export const PHONE_HREF = `tel:+1${PUBLIC_PHONE.replace(/\D/g, '')}`
+
+/**
+ * Amazon Location Service (address search + satellite tiles). The key is public by design: it is
+ * restricted to the site's domains and to tile/place reads. Without it (demo mode, local dev),
+ * the map falls back to free services that are fine for development but not for commercial traffic.
+ */
+export const AWS_LOCATION_KEY = env.VITE_AWS_LOCATION_KEY ?? ''
+export const AWS_LOCATION_REGION = env.VITE_AWS_LOCATION_REGION || COGNITO_REGION
+
+/** Ad-platform tracking. Each script loads only when its ID is set (GitHub variables at build time). */
+export const GA4_ID = env.VITE_GA4_ID ?? '' // G-XXXXXXX
+export const META_PIXEL_ID = env.VITE_META_PIXEL_ID ?? ''
+export const GOOGLE_ADS_ID = env.VITE_GOOGLE_ADS_ID ?? '' // AW-XXXXXXX
+export const GOOGLE_ADS_CONVERSION_LABEL = env.VITE_GOOGLE_ADS_CONVERSION_LABEL ?? ''

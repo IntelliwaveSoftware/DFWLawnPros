@@ -1,4 +1,5 @@
 // Admin analytics and contractor management.
+import { FUNNEL_STEPS } from '../../../shared/funnel.js'
 import { db } from '../db.js'
 import { body, HttpError, idParam, json, requireAdmin, type Routes } from '../http.js'
 
@@ -23,7 +24,7 @@ export const adminRoutes: Routes = {
     const prisma = db()
     const completed = { status: 'completed' } as const
 
-    const [leads, avgScore, sold, won, byService, byCity, bySource, byDay, funnel, outcomes, contractors] =
+    const [leads, avgScore, sold, won, byService, byCity, bySource, byDay, funnel, outcomes, contractors, quoteSteps] =
       await Promise.all([
         prisma.lead.count(),
         prisma.lead.aggregate({ _avg: { score: true } }),
@@ -62,6 +63,10 @@ export const adminRoutes: Routes = {
                    WHERE o.contractor_id = c.id AND o.won) AS won_value
           FROM contractors c LEFT JOIN lead_purchases p ON p.contractor_id = c.id
           GROUP BY c.id ORDER BY purchases DESC`,
+        // Instant-quote funnel: sessions reaching each step in the last 30 days.
+        prisma.$queryRaw<{ event: string; count: number }[]>`
+          SELECT event, count(*)::int AS count FROM funnel_events
+          WHERE created_at > now() - interval '30 days' GROUP BY event`,
       ])
 
     const eventCounts = Object.fromEntries(funnel.map((r) => [r.type, r.count]))
@@ -90,6 +95,11 @@ export const adminRoutes: Routes = {
         ['Lost', 'lost'],
       ].map(([key, col]) => ({ key, count: o[col] ?? 0 })),
       contractors,
+      quote_funnel: FUNNEL_STEPS.map(([key, stage]) => ({
+        key,
+        stage,
+        count: quoteSteps.find((r) => r.event === key)?.count ?? 0,
+      })),
     }
   },
 

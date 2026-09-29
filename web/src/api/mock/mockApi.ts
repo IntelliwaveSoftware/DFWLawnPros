@@ -1,3 +1,4 @@
+import { FUNNEL_STEPS } from '@shared/funnel'
 // In-browser implementation of the Lambda API for local development and demos.
 import { getSession } from '@/auth/auth'
 import { EXCLUSIVE_LEADS, leadPriceFor } from '@/lib/catalog'
@@ -231,6 +232,11 @@ export const mockApi: Api = {
         { stage: 'Quoted', count: countEvents('quoted') },
         { stage: 'Won', count: countEvents('won') },
       ],
+      quote_funnel: FUNNEL_STEPS.map(([key, stage]) => ({
+        key,
+        stage,
+        count: d.funnel_events.filter((e) => e.event === key && Date.parse(e.created_at) > Date.now() - 30 * 86_400_000).length,
+      })),
       outcomes: [
         { key: 'Contacted', count: d.outcomes.filter((o) => o.contacted).length },
         { key: 'Qualified', count: d.outcomes.filter((o) => o.qualified).length },
@@ -253,6 +259,13 @@ export const mockApi: Api = {
         }
       }),
     }
+  },
+
+  async trackEvent(input) {
+    const d = db()
+    if (d.funnel_events.some((e) => e.session_id === input.session_id && e.event === input.event)) return
+    d.funnel_events.push({ ...input, created_at: now() })
+    persist()
   },
 
   async listContractors() {

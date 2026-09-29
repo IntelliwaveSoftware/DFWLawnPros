@@ -1,3 +1,4 @@
+import type { TrackedEvent, TrackedPage } from '@shared/funnel'
 import type {
   Analytics,
   Contractor,
@@ -13,6 +14,14 @@ import type {
 } from '@/lib/types'
 
 export type ContractorProfileInput = Omit<Contractor, 'id' | 'created_at' | 'active' | 'approved_at' | 'approved_by'>
+export interface TrackEventInput {
+  event: TrackedEvent
+  page: TrackedPage
+  session_id: string
+  service?: string
+  city?: string
+  utm?: Record<string, string> | null
+}
 export type OutcomeInput = Omit<LeadOutcome, 'id' | 'lead_id' | 'contractor_id' | 'updated_at'>
 
 /**
@@ -33,6 +42,9 @@ export interface Api {
   approveContractor(id: string): Promise<void>
   getScoringRules(): Promise<ScoringRules>
   updateScoringRules(rules: ScoringRules): Promise<ScoringRules>
+
+  // Public: anonymous quote-funnel steps (see lib/track.ts)
+  trackEvent(event: TrackEventInput): Promise<void>
 
   // Contractor (any authenticated non-admin user)
   getMyProfile(): Promise<Contractor | null>

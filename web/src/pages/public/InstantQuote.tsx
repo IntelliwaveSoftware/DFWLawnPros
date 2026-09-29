@@ -9,17 +9,20 @@ import {
   Trash2,
   Undo2,
 } from 'lucide-react'
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { api } from '@/api'
 import { AddressSearch } from '@/components/AddressSearch'
-import { LawnMap, polygonSqft, type LatLng } from '@/components/quote/LawnMap'
+import { polygonSqft, starterOutline, type LatLng } from '@/components/quote/geometry'
+import { LawnMap } from '@/components/quote/LawnMap'
 import { img } from '@/content/images'
 import { TIMEFRAMES } from '@/lib/catalog'
 import { consentText, displayConsent, hasPhoneNumber } from '@/lib/consent'
 import { moneyRange, num } from '@/lib/format'
 import type { GeoResult } from '@/lib/geocode'
 import { LAWN_SIZE_PRESETS, PRICING_ITEMS, buildQuote, priceLine, primaryServiceFor } from '@/lib/pricing'
+import { setTrackingContext, track } from '@/lib/track'
+import { useIsPhone } from '@/lib/useMediaQuery'
 import { getUtm } from '@/lib/utm'
 
 type Step = 'address' | 'measure' | 'services' | 'contact'
@@ -51,10 +54,30 @@ function Stepper({ step }: { step: Step }) {
   )
 }
 
-export function InstantQuote() {
+export interface InstantQuoteProps {
+  /** Start on the map at this address (the landing page collects it in its own hero). */
+  address?: GeoResult
+  /** Quote items to pre-select, e.g. `{ artificial_turf: '' }` for a turf ad. */
+  initialItems?: Record<string, string>
+  /** Embedded mode: "change address" returns to the host page instead of this page's address step. */
+  onChangeAddress?: () => void
+}
+
+export function InstantQuote({ address: embeddedAddress, initialItems, onChangeAddress }: InstantQuoteProps = {}) {
   const navigate = useNavigate()
   const location = useLocation()
-  const initialAddress = (location.state as { address?: GeoResult } | null)?.address ?? null
+  const initialAddress = embeddedAddress ?? (location.state as { address?: GeoResult } | null)?.address ?? null
+  const phone = useIsPhone()
+
+  // The standalone page reports its own view; the landing page reports for itself when embedding.
+  useEffect(() => {
+    if (onChangeAddress) return
+    setTrackingContext({ page: 'instant_quote' })
+    track('page_view')
+    if (initialAddress) track('address_entered')
+    // Once per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [step, setStep] = useState<Step>(initialAddress ? 'measure' : 'address')
   const [address, setAddress] = useState<GeoResult | null>(initialAddress)
@@ -66,7 +89,7 @@ export function InstantQuote() {
   const [preset, setPreset] = useState<string | null>(null)
 
   // Services: item key -> selected option key ('' when the item has no options)
-  const [selected, setSelected] = useState<Record<string, string>>({ mowing: 'weekly' })
+  const [selected, setSelected] = useState<Record<string, string>>(initialItems ?? { mowing: 'weekly' })
 
   // Contact
   const [contact, setContact] = useState({ name: '', email: '', phone: '', zip: initialAddress?.zip ?? '', city: initialAddress?.city ?? '', timeframe: 'asap', notes: '' })
@@ -74,13 +97,25 @@ export function InstantQuote() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  // Phones start with a draggable outline instead of tap-to-draw. Until the customer adjusts it, it's an
+  // estimate (like a size preset), not a measurement.
+  const [starterUntouched, setStarterUntouched] = useState(false)
+  const seededFor = useRef<LatLng | null>(null)
+  useEffect(() => {
+    if (!phone || step !== 'measure' || !center || seededFor.current === center) return
+    seededFor.current = center
+    if (areas.length || drawing.length) return
+    setAreas([starterOutline(center)])
+    setStarterUntouched(true)
+  }, [phone, step, center, areas.length, drawing.length])
+
   const measuredSqft = useMemo(
     () => areas.reduce((s, a) => s + polygonSqft(a), 0) + (drawing.length >= 3 ? polygonSqft(drawing) : 0),
     [areas, drawing],
   )
   const presetSqft = LAWN_SIZE_PRESETS.find((p) => p.key === preset)?.sqft ?? 0
-  const measured = measuredSqft > 0
-  const sqft = measured ? measuredSqft : presetSqft
+  const measured = measuredSqft > 0 && !starterUntouched
+  const sqft = measured ? measuredSqft : presetSqft || measuredSqft
   const quote = useMemo(() => buildQuote(sqft, measured, selected), [sqft, measured, selected])
 
   const chooseAddress = (a: GeoResult) => {
@@ -89,7 +124,26 @@ export function InstantQuote() {
     setContact((c) => ({ ...c, zip: a.zip || c.zip, city: a.city || c.city }))
     setAreas([])
     setDrawing([])
+    setStarterUntouched(false)
     setStep('measure')
+    track('address_entered')
+  }
+
+  const changeAddress = () => (onChangeAddress ? onChangeAddress() : setStep('address'))
+
+  // Phones: any edit to the starter outline turns it into the customer's own measurement.
+  const touchOutline = () => {
+    setStarterUntouched(false)
+    setPreset(null)
+  }
+  const insertVertex = (area: number, index: number, p: LatLng) => {
+    touchOutline()
+    setAreas((all) => all.map((poly, ai) => (ai === area ? [...poly.slice(0, index), p, ...poly.slice(index)] : poly)))
+  }
+  const addStarterArea = () => {
+    if (!center) return
+    touchOutline()
+    setAreas((all) => [...all, starterOutline(center, 70 * all.length)])
   }
 
   const closeArea = () => {
@@ -100,6 +154,7 @@ export function InstantQuote() {
   }
 
   const moveVertex = (area: number | 'drawing', index: number, p: LatLng) => {
+    if (phone && area !== 'drawing') touchOutline()
     if (area === 'drawing') setDrawing((d) => d.map((x, i) => (i === index ? p : x)))
     else setAreas((all) => all.map((poly, ai) => (ai === area ? poly.map((x, i) => (i === index ? p : x)) : poly)))
   }
@@ -156,6 +211,7 @@ export function InstantQuote() {
         consent: { accepted: true, text: consentText(contact.phone), timestamp: new Date().toISOString() },
         utm: getUtm(),
       })
+      track('quote_submitted')
       navigate(`/thank-you?ref=${encodeURIComponent(id)}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
@@ -196,7 +252,7 @@ export function InstantQuote() {
       <div className="container-x py-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Stepper step={step} />
-          <button onClick={() => setStep('address')} className="text-sm text-muted hover:text-forest">
+          <button onClick={changeAddress} className="text-sm text-muted hover:text-forest">
             {address?.label} · <span className="underline">change</span>
           </button>
         </div>
@@ -209,17 +265,36 @@ export function InstantQuote() {
             center={center}
             areas={areas}
             drawing={drawing}
-            onAddPoint={(p) => step === 'measure' && setDrawing((d) => [...d, p])}
+            onAddPoint={(p) => step === 'measure' && !phone && setDrawing((d) => [...d, p])}
             onClose={closeArea}
             onMoveVertex={moveVertex}
+            touch={phone && step === 'measure'}
+            onInsertVertex={insertVertex}
           />
           <div className="pointer-events-none absolute top-3 left-1/2 z-[500] -translate-x-1/2">
-            <div className="rounded-full bg-forest-900/90 px-5 py-2 text-center text-white shadow-lg">
+            <div className="rounded-full bg-forest-900/90 px-5 py-2 text-center whitespace-nowrap text-white shadow-lg">
               <span className="text-xs tracking-wide text-white/70 uppercase">{measured ? 'Measured lawn' : 'Lawn area'}</span>
               <span className="font-display ml-2 text-xl">{sqft ? `${num(Math.round(sqft))} sq ft` : '—'}</span>
             </div>
           </div>
-          {step === 'measure' && (
+          {step === 'measure' && phone && (
+            <div className="absolute bottom-3 left-1/2 z-[500] flex -translate-x-1/2 gap-2">
+              <button className="btn-sm btn bg-white whitespace-nowrap text-ink shadow" onClick={addStarterArea}>
+                <Plus className="size-4" /> Add area
+              </button>
+              <button
+                className="btn-sm btn bg-white text-ink shadow"
+                onClick={() => {
+                  if (!center) return
+                  setAreas([starterOutline(center)])
+                  setStarterUntouched(true)
+                }}
+              >
+                <Undo2 className="size-4" /> Reset
+              </button>
+            </div>
+          )}
+          {step === 'measure' && !phone && (
             <div className="absolute bottom-3 left-1/2 z-[500] flex -translate-x-1/2 gap-2">
               <button
                 className="btn-sm btn bg-white text-ink shadow disabled:opacity-40"
@@ -250,22 +325,37 @@ export function InstantQuote() {
           {step === 'measure' && (
             <>
               <h1 className="text-2xl text-forest-900 sm:text-3xl">Outline your lawn</h1>
-              <ol className="mt-4 space-y-3 text-sm text-muted">
-                <li className="flex gap-3">
-                  <MousePointerClick className="size-5 shrink-0 text-leaf" />
-                  Click around the edges of your grass to drop points. Drag points to adjust.
-                </li>
-                <li className="flex gap-3">
-                  <Check className="size-5 shrink-0 text-leaf" />
-                  <span>
-                    Click the first (gold) point or <b>Finish area</b> to close the shape.
-                  </span>
-                </li>
-                <li className="flex gap-3">
-                  <Plus className="size-5 shrink-0 text-leaf" />
-                  Outline front and back yards as separate areas — we add them up.
-                </li>
-              </ol>
+              {phone ? (
+                <ol className="mt-4 space-y-3 text-sm text-muted">
+                  <li className="flex gap-3">
+                    <MousePointerClick className="size-5 shrink-0 text-leaf" />
+                    Drag the white corners so the green shape covers your grass.
+                  </li>
+                  <li className="flex gap-3">
+                    <Plus className="size-5 shrink-0 text-leaf" />
+                    <span>
+                      Drag a faded dot on an edge to add a corner. Use <b>Add area</b> for a back or side yard.
+                    </span>
+                  </li>
+                </ol>
+              ) : (
+                <ol className="mt-4 space-y-3 text-sm text-muted">
+                  <li className="flex gap-3">
+                    <MousePointerClick className="size-5 shrink-0 text-leaf" />
+                    Click around the edges of your grass to drop points. Drag points to adjust.
+                  </li>
+                  <li className="flex gap-3">
+                    <Check className="size-5 shrink-0 text-leaf" />
+                    <span>
+                      Click the first (gold) point or <b>Finish area</b> to close the shape.
+                    </span>
+                  </li>
+                  <li className="flex gap-3">
+                    <Plus className="size-5 shrink-0 text-leaf" />
+                    Outline front and back yards as separate areas — we add them up.
+                  </li>
+                </ol>
+              )}
 
               {areas.length > 0 && (
                 <ul className="mt-6 divide-y divide-stone rounded-xl border border-stone">
@@ -295,7 +385,13 @@ export function InstantQuote() {
                   {LAWN_SIZE_PRESETS.map((p) => (
                     <button
                       key={p.key}
-                      onClick={() => setPreset(preset === p.key ? null : p.key)}
+                      onClick={() => {
+                        setPreset(preset === p.key ? null : p.key)
+                        if (phone && starterUntouched) {
+                          setAreas([])
+                          setStarterUntouched(false)
+                        }
+                      }}
                       disabled={measured}
                       className={`rounded-xl border px-3 py-2.5 text-left text-sm transition-colors disabled:opacity-40 ${
                         preset === p.key && !measured ? 'border-forest bg-forest/5 ring-1 ring-forest' : 'border-stone hover:border-forest/50'
@@ -309,7 +405,15 @@ export function InstantQuote() {
               </div>
 
               <div className="mt-auto pt-8">
-                <button className="btn-primary w-full" disabled={!sqft} onClick={() => { closeArea(); setStep('services') }}>
+                <button
+                  className="btn-primary w-full"
+                  disabled={!sqft}
+                  onClick={() => {
+                    closeArea()
+                    setStep('services')
+                    track('lawn_measured')
+                  }}
+                >
                   Continue <ArrowRight className="size-4" />
                 </button>
               </div>
@@ -372,7 +476,14 @@ export function InstantQuote() {
                 <button className="btn-ghost" onClick={() => setStep('measure')}>
                   <ArrowLeft className="size-4" /> Back
                 </button>
-                <button className="btn-primary flex-1" disabled={!quote.lines.length} onClick={() => setStep('contact')}>
+                <button
+                  className="btn-primary flex-1"
+                  disabled={!quote.lines.length}
+                  onClick={() => {
+                    setStep('contact')
+                    track('services_chosen')
+                  }}
+                >
                   See my price <ArrowRight className="size-4" />
                 </button>
               </div>
@@ -382,7 +493,8 @@ export function InstantQuote() {
           {step === 'contact' && (
             <form onSubmit={submit} noValidate className="flex flex-1 flex-col">
               <p className="eyebrow">Your instant estimate</p>
-              <div className="mt-3 rounded-2xl bg-forest p-5 text-white">
+              <h1 className="mt-1 text-2xl text-forest-900 sm:text-3xl">Your price is ready</h1>
+              <div className="mt-4 rounded-2xl bg-forest p-5 text-white">
                 <ul className="space-y-2 text-sm">
                   {quote.lines.map((l) => (
                     <li key={l.key} className="flex justify-between gap-3">
@@ -402,7 +514,10 @@ export function InstantQuote() {
                 </p>
               </div>
 
-              <p className="mt-6 font-semibold text-forest-900">Where should your pro reach you?</p>
+              <p className="mt-6 font-semibold text-forest-900">Get this price confirmed by a vetted local pro</p>
+              <p className="mt-1 text-sm text-muted">
+                Free and no obligation. Your details go to one company that serves your area — not a crowd of contractors.
+              </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <input className="input sm:col-span-2" placeholder="Full name" autoComplete="name" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} />
                 <input className="input" type="email" placeholder="Email" autoComplete="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} />
@@ -437,7 +552,7 @@ export function InstantQuote() {
                 </button>
                 <button type="submit" className="btn-gold flex-1" disabled={submitting}>
                   {submitting && <Loader2 className="size-4 animate-spin" />}
-                  Request my service
+                  Confirm my price
                 </button>
               </div>
             </form>

@@ -206,6 +206,23 @@ model LeadEvent {
   @@map("lead_events")
 }
 
+/// Anonymous instant-quote funnel steps from the website: one row per browser session and step, no
+/// personal data. Drives the drop-off chart on the admin Analytics page.
+model FunnelEvent {
+  id         BigInt   @id @default(autoincrement())
+  session_id String   @db.VarChar(64)
+  event      String   @db.VarChar(40)
+  page       String   @db.VarChar(20)
+  service    String?  @db.VarChar(40)
+  city       String?  @db.VarChar(60)
+  utm        Json?
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([session_id, event])
+  @@index([created_at])
+  @@map("funnel_events")
+}
+
 /// Versioned scoring rules; exactly one active. Seeded from shared/scoring-rules.json on first use.
 model ScoringConfig {
   version    Int      @id @default(autoincrement())

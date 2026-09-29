@@ -1,9 +1,10 @@
 import { Link } from 'react-router'
 import { BRAND } from '@/content/site'
 
-export function Logo({ light = false, to = '/' }: { light?: boolean; to?: string }) {
-  return (
-    <Link to={to} className="flex items-center gap-2.5" aria-label={`${BRAND.name} home`}>
+/** `to={null}` renders the logo without a link (ad landing pages keep visitors on the page). */
+export function Logo({ light = false, to = '/' }: { light?: boolean; to?: string | null }) {
+  const content = (
+    <>
       <svg viewBox="0 0 32 32" className="size-9 shrink-0" aria-hidden>
         <rect width="32" height="32" rx="8" fill={light ? '#f6f3ec' : '#1f3d2b'} />
         <path
@@ -17,6 +18,12 @@ export function Logo({ light = false, to = '/' }: { light?: boolean; to?: string
       <span className={`font-display text-xl leading-none font-semibold whitespace-nowrap ${light ? 'text-white' : 'text-forest'}`}>
         DFW Lawn Pros
       </span>
+    </>
+  )
+  if (to === null) return <div className="flex items-center gap-2.5">{content}</div>
+  return (
+    <Link to={to} className="flex items-center gap-2.5" aria-label={`${BRAND.name} home`}>
+      {content}
     </Link>
   )
 }

@@ -1,13 +1,19 @@
 import { Check, Zap } from 'lucide-react'
+import { useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { LeadForm } from '@/components/LeadForm'
 import { img } from '@/content/images'
 import { getService } from '@/lib/catalog'
+import { setTrackingContext } from '@/lib/track'
 import type { ServiceKey } from '@/lib/types'
 
 export function GetQuote() {
   const [params] = useSearchParams()
   const service = getService(params.get('service') ?? '')?.key ?? ''
+  // Set by the landscaping version of the ad landing page.
+  const city = (params.get('city') ?? '').slice(0, 60)
+
+  useEffect(() => setTrackingContext({ page: 'lead_form', service: service || undefined, city: city || undefined }), [service, city])
 
   return (
     <div className="pt-18">
@@ -24,7 +30,7 @@ export function GetQuote() {
       </div>
       <div className="container-x grid gap-10 py-14 lg:grid-cols-[1.6fr_1fr]">
         <div className="card p-6 sm:p-10">
-          <LeadForm key={service} defaultService={service as ServiceKey | ''} />
+          <LeadForm key={service} defaultService={service as ServiceKey | ''} defaultCity={city} />
         </div>
         <aside className="space-y-6">
           <Link

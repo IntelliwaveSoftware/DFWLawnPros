@@ -24,6 +24,8 @@ export const router = createBrowserRouter([
       { path: '*', element: <NotFound /> },
     ],
   },
+  // Ad landing page: its own minimal layout, no site navigation.
+  { path: '/lawn-quote', lazy: async () => ({ Component: (await import('@/pages/public/LawnQuoteLanding')).LawnQuoteLanding }) },
   { path: '/login', element: <Login /> },
   { path: '/contractor/signup', lazy: async () => ({ Component: (await import('@/pages/contractor/ContractorSignup')).ContractorSignup }) },
   {

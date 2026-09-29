@@ -1,24 +1,24 @@
-import turfArea from '@turf/area'
 import L from 'leaflet'
 import { useEffect } from 'react'
 import { MapContainer, Marker, Polygon, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet'
+import type { LatLng } from './geometry'
+import { useSatelliteSource } from './satellite'
 
-export type LatLng = [number, number]
-
-// Satellite imagery. Esri World Imagery works for development; for commercial production use,
-// configure a licensed provider (ArcGIS Location Platform key, Mapbox, Google Map Tiles) via env.
-const TILE_URL =
-  import.meta.env.VITE_SATELLITE_TILE_URL ||
-  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-const TILE_ATTRIBUTION = import.meta.env.VITE_SATELLITE_TILE_ATTRIBUTION || 'Imagery © Esri, Maxar, Earthstar Geographics'
-
-const SQFT_PER_M2 = 10.7639
-
-export function polygonSqft(points: LatLng[]): number {
-  if (points.length < 3) return 0
-  const ring = [...points, points[0]].map(([lat, lng]) => [lng, lat])
-  return turfArea({ type: 'Polygon', coordinates: [ring] }) * SQFT_PER_M2
-}
+const handle = (size: number, fill: string, border: string) =>
+  L.divIcon({
+    className: '',
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${fill};border:3px solid ${border};box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  })
+// Phones: bigger corners to grab, plus translucent midpoints that become a new corner when dragged.
+const touchVertexIcon = handle(26, '#fff', '#c7a54a')
+const midpointIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:22px;height:22px;border-radius:9999px;background:rgba(255,255,255,.55);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35)"></div>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
+})
 
 const vertexIcon = L.divIcon({
   className: '',
@@ -38,6 +38,24 @@ const homeIcon = L.divIcon({
   iconSize: [30, 30],
   iconAnchor: [15, 30],
 })
+
+function SatelliteLayer() {
+  const source = useSatelliteSource()
+  if (!source) return null
+  // 512px tiles cover a 256px tile's area one zoom level up; zoomOffset keeps Leaflet's zoom levels aligned.
+  const large = source.tileSize === 512
+  return (
+    <TileLayer
+      key={source.url}
+      url={source.url}
+      attribution={source.attribution}
+      tileSize={source.tileSize}
+      zoomOffset={large ? -1 : 0}
+      maxNativeZoom={large ? source.maxNativeZoom + 1 : source.maxNativeZoom}
+      maxZoom={21}
+    />
+  )
+}
 
 function ClickCapture({ onClick }: { onClick: (p: LatLng) => void }) {
   useMapEvents({ click: (e) => onClick([e.latlng.lat, e.latlng.lng]) })
@@ -59,6 +77,8 @@ export function LawnMap({
   onAddPoint,
   onClose,
   onMoveVertex,
+  touch = false,
+  onInsertVertex,
 }: {
   /** Keep this reference stable (e.g. from state); changing it recenters the map. */
   center: LatLng
@@ -69,6 +89,10 @@ export function LawnMap({
   onAddPoint: (p: LatLng) => void
   onClose: () => void
   onMoveVertex: (area: number | 'drawing', index: number, p: LatLng) => void
+  /** Phone mode: larger handles and draggable edge midpoints. */
+  touch?: boolean
+  /** Phone mode: a midpoint was dragged, adding a corner at `index` of that area. */
+  onInsertVertex?: (area: number, index: number, p: LatLng) => void
 }) {
   return (
     <MapContainer
@@ -80,7 +104,7 @@ export function LawnMap({
       doubleClickZoom={false}
       attributionControl
     >
-      <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} maxNativeZoom={19} maxZoom={21} />
+      <SatelliteLayer />
       <Recenter center={center} />
       <ClickCapture onClick={onAddPoint} />
       <Marker position={center} icon={homeIcon} interactive={false} />
@@ -88,12 +112,35 @@ export function LawnMap({
       {areas.map((poly, ai) => (
         <Polygon key={ai} positions={poly} pathOptions={{ color: '#c7a54a', weight: 3, fillColor: '#8fd16a', fillOpacity: 0.35 }} />
       ))}
+      {touch &&
+        onInsertVertex &&
+        areas.map((poly, ai) =>
+          poly.map((p, vi) => {
+            const next = poly[(vi + 1) % poly.length]
+            const mid: LatLng = [(p[0] + next[0]) / 2, (p[1] + next[1]) / 2]
+            return (
+              <Marker
+                // Keyed by position so the handle snaps back to the new midpoint after each insert.
+                key={`m-${ai}-${vi}-${mid.join(',')}`}
+                position={mid}
+                icon={midpointIcon}
+                draggable
+                eventHandlers={{
+                  dragend: (e) => {
+                    const ll = (e.target as L.Marker).getLatLng()
+                    onInsertVertex(ai, vi + 1, [ll.lat, ll.lng])
+                  },
+                }}
+              />
+            )
+          }),
+        )}
       {areas.map((poly, ai) =>
         poly.map((p, vi) => (
           <Marker
             key={`${ai}-${vi}`}
             position={p}
-            icon={vertexIcon}
+            icon={touch ? touchVertexIcon : vertexIcon}
             draggable
             eventHandlers={{
               drag: (e) => {

@@ -85,7 +85,7 @@ const extraction = {
 
 beforeEach(async () => {
   await db().$executeRawUnsafe(
-    'TRUNCATE lead_events, lead_outcomes, lead_purchases, lead_enrichments, leads, contractors, scoring_configs RESTART IDENTITY CASCADE',
+    'TRUNCATE lead_events, lead_outcomes, lead_purchases, lead_enrichments, leads, contractors, scoring_configs, funnel_events RESTART IDENTITY CASCADE',
   )
   anthropicCreate.mockReset()
   anthropicCreate.mockResolvedValue({
@@ -104,6 +104,36 @@ describe('warmup', () => {
     expect(res.status).toBe(204)
     expect(spy).toHaveBeenCalledOnce()
     spy.mockRestore()
+  })
+})
+
+describe('quote funnel events', () => {
+  const step = (event: string, session_id = 'session-aaaa1111', extra: Record<string, unknown> = {}) =>
+    call('POST /events', { body: { event, session_id, page: 'landing', service: 'lawn_care', city: 'Frisco', ...extra } })
+
+  it('records each step once per session and reports the funnel to admins', async () => {
+    expect((await step('page_view')).status).toBe(204)
+    expect((await step('page_view')).status).toBe(204) // reload: still one row
+    await step('address_entered')
+    await step('page_view', 'session-bbbb2222', { utm: { utm_source: 'google', utm_campaign: 'frisco', evil: 'x' } })
+
+    const rows = await db().funnelEvent.findMany({ orderBy: { id: 'asc' } })
+    expect(rows).toHaveLength(3)
+    expect(rows[2].utm).toEqual({ utm_source: 'google', utm_campaign: 'frisco' })
+
+    const analytics = await call('GET /admin/analytics', { claims: ADMIN })
+    expect(analytics.body.quote_funnel.slice(0, 3)).toEqual([
+      { key: 'page_view', stage: 'Viewed quote page', count: 2 },
+      { key: 'address_entered', stage: 'Entered address', count: 1 },
+      { key: 'lawn_measured', stage: 'Measured lawn', count: 0 },
+    ])
+  })
+
+  it('rejects unknown events, pages and malformed session ids', async () => {
+    expect((await step('drop_tables')).status).toBe(400)
+    expect((await step('page_view', 'session-aaaa1111', { page: 'admin' })).status).toBe(400)
+    expect((await step('page_view', 'bad id!')).status).toBe(400)
+    expect(await db().funnelEvent.count()).toBe(0)
   })
 })
 

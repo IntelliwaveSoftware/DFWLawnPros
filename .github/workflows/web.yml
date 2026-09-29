@@ -65,10 +65,13 @@ jobs:
             aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
               --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
           }
+          maps_key=$(aws location describe-key --key-name "$(output MapsKeyName)" --query Key --output text)
           {
             echo "VITE_API_BASE_URL=$(output ApiUrl)"
             echo "VITE_COGNITO_REGION=$(output CognitoRegion)"
             echo "VITE_COGNITO_CLIENT_ID=$(output CognitoClientId)"
+            echo "VITE_AWS_LOCATION_REGION=$(output CognitoRegion)"
+            echo "VITE_AWS_LOCATION_KEY=$maps_key"
           } >> "$GITHUB_ENV"
 
       - name: Build
@@ -76,6 +79,11 @@ jobs:
         env:
           VITE_PUBLIC_PHONE: ${{ vars.VITE_PUBLIC_PHONE }}
           VITE_PUBLIC_EMAIL: ${{ vars.VITE_PUBLIC_EMAIL }}
+          # Ad-platform tracking; each script loads only when its ID is set.
+          VITE_GA4_ID: ${{ vars.VITE_GA4_ID }}
+          VITE_META_PIXEL_ID: ${{ vars.VITE_META_PIXEL_ID }}
+          VITE_GOOGLE_ADS_ID: ${{ vars.VITE_GOOGLE_ADS_ID }}
+          VITE_GOOGLE_ADS_CONVERSION_LABEL: ${{ vars.VITE_GOOGLE_ADS_CONVERSION_LABEL }}
 
       # Hashed assets first (cached forever), index.html last (never cached), so visitors never get an
       # index.html pointing at files that aren't uploaded yet. Old assets are kept, not deleted, so

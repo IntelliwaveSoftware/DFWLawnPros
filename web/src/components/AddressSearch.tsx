@@ -1,6 +1,6 @@
 import { Loader2, MapPin, Search } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
-import { searchAddress, type GeoResult } from '@/lib/geocode'
+import { suggestAddresses, type AddressSuggestion, type GeoResult } from '@/lib/geocode'
 
 export function AddressSearch({
   onSelect,
@@ -16,7 +16,7 @@ export function AddressSearch({
   size?: 'lg' | 'md'
 }) {
   const [query, setQuery] = useState(initialQuery)
-  const [results, setResults] = useState<GeoResult[]>([])
+  const [results, setResults] = useState<AddressSuggestion[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
@@ -37,7 +37,7 @@ export function AddressSearch({
       }
       setLoading(true)
       try {
-        const r = await searchAddress(query, ctrl.signal)
+        const r = await suggestAddresses(query, ctrl.signal)
         setResults(r)
         setActive(0)
         setOpen(true)
@@ -53,21 +53,28 @@ export function AddressSearch({
     }
   }, [query])
 
-  const choose = (r: GeoResult) => {
+  const choose = async (s: AddressSuggestion) => {
     picked.current = true
-    setQuery(r.label)
+    setQuery(s.label)
     setOpen(false)
     setError('')
-    onSelect(r)
+    setLoading(true)
+    try {
+      onSelect(await s.resolve())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'We couldn’t look up that address. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const submit = async () => {
     if (results[active]) return choose(results[active])
     if (query.trim().length < 4) return setError('Please enter your street address.')
     setLoading(true)
-    const r = await searchAddress(query).catch(() => [])
+    const r = await suggestAddresses(query).catch(() => [])
     setLoading(false)
-    if (r[0]) choose(r[0])
+    if (r[0]) await choose(r[0])
     else setError('We couldn’t find that address. Try including your city and ZIP.')
   }
 
@@ -118,13 +125,13 @@ export function AddressSearch({
         >
           {results.map((r, i) => (
             <li
-              key={`${r.lat},${r.lng}`}
+              key={r.id}
               role="option"
               aria-selected={i === active}
               className={`flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm ${i === active ? 'bg-sand' : ''}`}
               onMouseDown={(e) => {
                 e.preventDefault()
-                choose(r)
+                void choose(r)
               }}
               onMouseEnter={() => setActive(i)}
             >

@@ -8,6 +8,7 @@ import type {
   LeadPurchase,
   ScoringRules,
 } from '@/lib/types'
+import type { TrackEventInput } from '../types'
 import { buildSeed } from './seed'
 
 export interface MockUser {
@@ -27,12 +28,14 @@ export interface MockDb {
   purchases: LeadPurchase[]
   outcomes: LeadOutcome[]
   events: LeadEvent[]
+  /** Anonymous quote-funnel steps (one per session and step), like the funnel_events table. */
+  funnel_events: (TrackEventInput & { created_at: string })[]
   scoring_rules: ScoringRules
 }
 
 const KEY = 'dfwlp.mockdb'
 // Bump when the stored shape changes; older browser data is replaced with a fresh seed.
-const DB_VERSION = 2
+const DB_VERSION = 3
 let memory: MockDb | null = null
 
 export function db(): MockDb {

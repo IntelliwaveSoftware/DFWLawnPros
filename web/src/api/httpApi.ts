@@ -31,6 +31,7 @@ const query = (filters: LeadFilters) => {
 
 export const httpApi: Api = {
   submitLead: (lead) => request('POST', '/leads', lead, false),
+  trackEvent: (event) => request('POST', '/events', event, false),
 
   listLeads: (filters) => request('GET', `/admin/leads${query(filters)}`),
   getLead: (id) => request('GET', `/admin/leads/${id}`),

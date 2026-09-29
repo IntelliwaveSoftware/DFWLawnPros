@@ -243,6 +243,8 @@ export interface Analytics {
   by_source: { key: string; count: number }[]
   by_day: { date: string; leads: number; sold: number }[]
   funnel: { stage: string; count: number }[]
+  /** Instant-quote sessions reaching each step in the last 30 days. */
+  quote_funnel: { key: string; stage: string; count: number }[]
   outcomes: { key: string; count: number }[]
   contractors: {
     id: string

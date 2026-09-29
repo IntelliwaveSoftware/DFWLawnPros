@@ -206,6 +206,27 @@ GitHub gets short-lived AWS credentials through OIDC; no AWS keys are stored in 
 - Old hashed JS/CSS files stay in the bucket after a deploy, so open tabs can still load their route chunks.
 - If you rename the API stack or the repo, update `infra/config.json` and re-run setup with `--github`.
 
+## Ad landing page, maps and tracking
+
+**Landing page:** `/lawn-quote` is built for paid traffic: one goal, no site navigation, `noindex`. Link ads with
+`?service=` (`lawn-care`, `artificial-turf`, `landscaping`) and `?city=` (Dallas, Fort Worth, Plano, Frisco, McKinney,
+Allen, Prosper, Celina, Richardson, Garland) so the headline matches the ad, e.g.
+`/lawn-quote?service=artificial-turf&city=fort-worth`. Lawn care and turf open the instant quote in place with that
+service pre-selected; landscaping sends visitors to the project form with the city filled in. Variants and copy live
+in `web/src/content/landing.ts`.
+
+**Maps:** address search and satellite imagery use Amazon Location Service (Places v2 and Maps v2). The API stack
+creates a browser key (`MapsKey`) limited to tile and place reads from the site's origins and localhost; the Web
+workflow reads its value at build time. Without a key (demo mode, `npm run dev` without `VITE_AWS_LOCATION_KEY`) the
+map falls back to Esri imagery and OpenStreetMap search, which are fine for development only. On phones, the map
+starts with a draggable outline instead of tap-to-draw; desktop is unchanged.
+
+**Tracking:** each instant-quote step (`shared/funnel.ts`) is recorded anonymously via `POST /events` and charted on
+the admin Analytics page. To also send events to ad platforms, set these GitHub variables in the `production`
+environment (each script loads only when set): `VITE_GA4_ID`, `VITE_META_PIXEL_ID`, `VITE_GOOGLE_ADS_ID`,
+`VITE_GOOGLE_ADS_CONVERSION_LABEL`. A submitted quote or project form counts as a Google Ads conversion and a Meta
+`Lead`. Mention analytics and advertising cookies in the privacy policy before turning these on.
+
 ## Tests
 
 ```bash
