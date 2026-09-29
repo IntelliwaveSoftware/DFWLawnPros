@@ -15,6 +15,7 @@ import { api } from '@/api'
 import { AddressSearch } from '@/components/AddressSearch'
 import { polygonSqft, starterOutline, type LatLng } from '@/components/quote/geometry'
 import { LawnMap } from '@/components/quote/LawnMap'
+import { MapIntro } from '@/components/quote/MapIntro'
 import { img } from '@/content/images'
 import { TIMEFRAMES } from '@/lib/catalog'
 import { consentText, displayConsent, hasPhoneNumber } from '@/lib/consent'
@@ -55,23 +56,26 @@ function Stepper({ step }: { step: Step }) {
 }
 
 export interface InstantQuoteProps {
-  /** Start on the map at this address (the landing page collects it in its own hero). */
-  address?: GeoResult
+  /**
+   * Landing-page mode: render only the map + panel section (no page hero). Before an address is entered
+   * the map shows the metro preview and the panel has its own address box; picking one flies the map in.
+   */
+  embedded?: boolean
+  /** An address entered elsewhere on the host page (its banner). Each new `id` starts the quote with it. */
+  addressRequest?: { address: GeoResult; id: number } | null
   /** Quote items to pre-select, e.g. `{ artificial_turf: '' }` for a turf ad. */
   initialItems?: Record<string, string>
-  /** Embedded mode: "change address" returns to the host page instead of this page's address step. */
-  onChangeAddress?: () => void
 }
 
-export function InstantQuote({ address: embeddedAddress, initialItems, onChangeAddress }: InstantQuoteProps = {}) {
+export function InstantQuote({ embedded = false, addressRequest, initialItems }: InstantQuoteProps = {}) {
   const navigate = useNavigate()
   const location = useLocation()
-  const initialAddress = embeddedAddress ?? (location.state as { address?: GeoResult } | null)?.address ?? null
+  const initialAddress = embedded ? null : ((location.state as { address?: GeoResult } | null)?.address ?? null)
   const phone = useIsPhone()
 
   // The standalone page reports its own view; the landing page reports for itself when embedding.
   useEffect(() => {
-    if (onChangeAddress) return
+    if (embedded) return
     setTrackingContext({ page: 'instant_quote' })
     track('page_view')
     if (initialAddress) track('address_entered')
@@ -118,7 +122,7 @@ export function InstantQuote({ address: embeddedAddress, initialItems, onChangeA
   const sqft = measured ? measuredSqft : presetSqft || measuredSqft
   const quote = useMemo(() => buildQuote(sqft, measured, selected), [sqft, measured, selected])
 
-  const chooseAddress = (a: GeoResult) => {
+  const startAt = (a: GeoResult) => {
     setAddress(a)
     setCenter([a.lat, a.lng])
     setContact((c) => ({ ...c, zip: a.zip || c.zip, city: a.city || c.city }))
@@ -126,10 +130,35 @@ export function InstantQuote({ address: embeddedAddress, initialItems, onChangeA
     setDrawing([])
     setStarterUntouched(false)
     setStep('measure')
-    track('address_entered')
   }
 
-  const changeAddress = () => (onChangeAddress ? onChangeAddress() : setStep('address'))
+  // Embedded: the metro preview flies to the address first (see MapIntro), then the quote starts there.
+  const [flightTarget, setFlightTarget] = useState<GeoResult | null>(null)
+  const chooseAddress = (a: GeoResult) => {
+    track('address_entered')
+    if (!embedded) return startAt(a)
+    setStep('address')
+    setCenter(null)
+    setFlightTarget(a)
+  }
+  const arrive = () => {
+    if (flightTarget) startAt(flightTarget)
+    setFlightTarget(null)
+  }
+
+  useEffect(() => {
+    if (addressRequest) chooseAddress(addressRequest.address)
+    // Only when the host page sends a new address.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressRequest?.id])
+
+  const changeAddress = () => {
+    setStep('address')
+    if (embedded) {
+      setCenter(null)
+      setAddress(null)
+    }
+  }
 
   // Phones: any edit to the starter outline turns it into the customer's own measurement.
   const touchOutline = () => {
@@ -220,8 +249,8 @@ export function InstantQuote({ address: embeddedAddress, initialItems, onChangeA
     }
   }
 
-  // ---------- Step: address ----------
-  if (step === 'address' || !center) {
+  // ---------- Step: address (standalone page) ----------
+  if (!embedded && (step === 'address' || !center)) {
     return (
       <section className="relative isolate flex min-h-[85vh] items-center overflow-hidden bg-forest-900 pt-24 pb-16 text-white">
         <img src={img.lawnCloseup} alt="" className="absolute inset-0 -z-10 size-full object-cover opacity-40" />
@@ -247,81 +276,118 @@ export function InstantQuote({ address: embeddedAddress, initialItems, onChangeA
   }
 
   // ---------- Steps with map/summary layout ----------
+  const preview = step === 'address' || !center // embedded, before the map has arrived at a home
   return (
-    <div className="bg-sand/50 pt-18">
+    <div className={`bg-sand/50 ${embedded ? '' : 'pt-18'}`}>
       <div className="container-x py-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Stepper step={step} />
-          <button onClick={changeAddress} className="text-sm text-muted hover:text-forest">
-            {address?.label} · <span className="underline">change</span>
-          </button>
+          {!preview && (
+            <button onClick={changeAddress} className="text-sm text-muted hover:text-forest">
+              {address?.label} · <span className="underline">change</span>
+            </button>
+          )}
         </div>
       </div>
 
       <div className="container-x grid gap-6 pb-16 lg:grid-cols-[1.5fr_1fr]">
         {/* Left column: map during measuring, otherwise a map preview */}
         <div className="relative h-[55vh] min-h-[380px] overflow-hidden rounded-2xl shadow-lg ring-1 ring-black/5 lg:h-[calc(100vh-11rem)]">
-          <LawnMap
-            center={center}
-            areas={areas}
-            drawing={drawing}
-            onAddPoint={(p) => step === 'measure' && !phone && setDrawing((d) => [...d, p])}
-            onClose={closeArea}
-            onMoveVertex={moveVertex}
-            touch={phone && step === 'measure'}
-            onInsertVertex={insertVertex}
-          />
-          <div className="pointer-events-none absolute top-3 left-1/2 z-[500] -translate-x-1/2">
-            <div className="rounded-full bg-forest-900/90 px-5 py-2 text-center whitespace-nowrap text-white shadow-lg">
-              <span className="text-xs tracking-wide text-white/70 uppercase">{measured ? 'Measured lawn' : 'Lawn area'}</span>
-              <span className="font-display ml-2 text-xl">{sqft ? `${num(Math.round(sqft))} sq ft` : '—'}</span>
-            </div>
-          </div>
-          {step === 'measure' && phone && (
-            <div className="absolute bottom-3 left-1/2 z-[500] flex -translate-x-1/2 gap-2">
-              <button className="btn-sm btn bg-white whitespace-nowrap text-ink shadow" onClick={addStarterArea}>
-                <Plus className="size-4" /> Add area
-              </button>
-              <button
-                className="btn-sm btn bg-white text-ink shadow"
-                onClick={() => {
-                  if (!center) return
-                  setAreas([starterOutline(center)])
-                  setStarterUntouched(true)
-                }}
-              >
-                <Undo2 className="size-4" /> Reset
-              </button>
-            </div>
-          )}
-          {step === 'measure' && !phone && (
-            <div className="absolute bottom-3 left-1/2 z-[500] flex -translate-x-1/2 gap-2">
-              <button
-                className="btn-sm btn bg-white text-ink shadow disabled:opacity-40"
-                disabled={!drawing.length}
-                onClick={() => setDrawing((d) => d.slice(0, -1))}
-              >
-                <Undo2 className="size-4" /> Undo
-              </button>
-              <button className="btn-sm btn bg-white text-ink shadow disabled:opacity-40" disabled={drawing.length < 3} onClick={closeArea}>
-                <Check className="size-4" /> Finish area
-              </button>
-              <button
-                className="btn-sm btn bg-white text-red-700 shadow disabled:opacity-40"
-                disabled={!drawing.length && !areas.length}
-                onClick={() => {
-                  setAreas([])
-                  setDrawing([])
-                }}
-              >
-                <Trash2 className="size-4" /> Clear
-              </button>
-            </div>
+          {preview || !center ? (
+            <MapIntro target={flightTarget && [flightTarget.lat, flightTarget.lng]} onArrive={arrive} />
+          ) : (
+            <>
+              <LawnMap
+                center={center}
+                areas={areas}
+                drawing={drawing}
+                onAddPoint={(p) => step === 'measure' && !phone && setDrawing((d) => [...d, p])}
+                onClose={closeArea}
+                onMoveVertex={moveVertex}
+                touch={phone && step === 'measure'}
+                onInsertVertex={insertVertex}
+              />
+              <div className="pointer-events-none absolute top-3 left-1/2 z-[500] -translate-x-1/2">
+                <div className="rounded-full bg-forest-900/90 px-5 py-2 text-center whitespace-nowrap text-white shadow-lg">
+                  <span className="text-xs tracking-wide text-white/70 uppercase">{measured ? 'Measured lawn' : 'Lawn area'}</span>
+                  <span className="font-display ml-2 text-xl">{sqft ? `${num(Math.round(sqft))} sq ft` : '—'}</span>
+                </div>
+              </div>
+              {step === 'measure' && phone && (
+                <div className="absolute bottom-3 left-1/2 z-[500] flex -translate-x-1/2 gap-2">
+                  <button className="btn-sm btn bg-white whitespace-nowrap text-ink shadow" onClick={addStarterArea}>
+                    <Plus className="size-4" /> Add area
+                  </button>
+                  <button
+                    className="btn-sm btn bg-white text-ink shadow"
+                    onClick={() => {
+                      if (!center) return
+                      setAreas([starterOutline(center)])
+                      setStarterUntouched(true)
+                    }}
+                  >
+                    <Undo2 className="size-4" /> Reset
+                  </button>
+                </div>
+              )}
+              {step === 'measure' && !phone && (
+                <div className="absolute bottom-3 left-1/2 z-[500] flex -translate-x-1/2 gap-2">
+                  <button
+                    className="btn-sm btn bg-white text-ink shadow disabled:opacity-40"
+                    disabled={!drawing.length}
+                    onClick={() => setDrawing((d) => d.slice(0, -1))}
+                  >
+                    <Undo2 className="size-4" /> Undo
+                  </button>
+                  <button className="btn-sm btn bg-white text-ink shadow disabled:opacity-40" disabled={drawing.length < 3} onClick={closeArea}>
+                    <Check className="size-4" /> Finish area
+                  </button>
+                  <button
+                    className="btn-sm btn bg-white text-red-700 shadow disabled:opacity-40"
+                    disabled={!drawing.length && !areas.length}
+                    onClick={() => {
+                      setAreas([])
+                      setDrawing([])
+                    }}
+                  >
+                    <Trash2 className="size-4" /> Clear
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 
         {/* Right column: step panel */}
         <div className="card flex flex-col p-6 sm:p-8">
+          {preview && (
+            <>
+              <h2 className="text-2xl text-forest-900 sm:text-3xl">{flightTarget ? 'Finding your home…' : 'Start with your address'}</h2>
+              <p className="mt-2 text-sm text-muted">
+                We’ll pull up a satellite view of your home so you can outline your lawn and see your price instantly.
+              </p>
+              <div className="mt-6">
+                <AddressSearch onSelect={chooseAddress} size="md" buttonLabel="See my price" />
+              </div>
+              <ol className="mt-8 space-y-3 text-sm text-muted">
+                {['Outline your lawn on the map', 'Choose your services', 'See your price and get it confirmed'].map((t, i) => (
+                  <li key={t} className="flex items-center gap-3">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-stone text-xs font-semibold text-ink">
+                      {i + 2}
+                    </span>
+                    {t}
+                  </li>
+                ))}
+              </ol>
+              <ul className="mt-auto space-y-2 pt-8 text-sm text-muted">
+                {['Free & no obligation', 'Vetted local pros only', 'Price confirmed on first visit'].map((t) => (
+                  <li key={t} className="flex items-center gap-2">
+                    <Check className="size-4 text-leaf" /> {t}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           {step === 'measure' && (
             <>
               <h1 className="text-2xl text-forest-900 sm:text-3xl">Outline your lawn</h1>

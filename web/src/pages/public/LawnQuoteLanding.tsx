@@ -1,16 +1,17 @@
 // Ad landing page: one goal (start a quote), no site navigation. Ads link here with ?service=…&city=…
-// so the headline matches the ad. The hero shows our own metro aerial image (no map requests on page
-// load); picking an address loads the live map behind it at the same framing, cross-fades, and flies to
-// the customer's home before the instant quote takes over.
-import { ArrowRight, BadgeCheck, Check, ChevronDown, Loader2, Phone, PhoneCall, Ruler, ShieldCheck, Sparkles, Users } from 'lucide-react'
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+// so the headline matches the ad. Below the banner, the quote section works like the instant-quote page:
+// its map shows our own metro aerial image until an address is entered (banner or section input), then
+// flies to the home and the quote continues in place. Landscaping pages show the consultation form instead.
+import { BadgeCheck, Check, ChevronDown, Loader2, Mail, MapPin, Phone, PhoneCall, Ruler, ShieldCheck, Sparkles, Users } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api } from '@/api'
 import { AddressSearch } from '@/components/AddressSearch'
+import { ConsultationForm } from '@/components/ConsultationForm'
 import { Logo } from '@/components/Logo'
-import { FlyInMap } from '@/components/quote/FlyInMap'
-import { PHONE_HREF, PUBLIC_PHONE } from '@/config/env'
-import { BACKDROP, LANDING_COPY, LANDING_FAQ, resolveCity, resolveService, type LandingService } from '@/content/landing'
+import { PHONE_HREF, PUBLIC_EMAIL, PUBLIC_PHONE } from '@/config/env'
+import { img } from '@/content/images'
+import { LANDING_CITIES, LANDING_COPY, LANDING_FAQ, resolveCity, resolveService, type LandingService } from '@/content/landing'
 import { SERVICES } from '@/lib/catalog'
 import { consentText, displayConsent } from '@/lib/consent'
 import { moneyRange, num } from '@/lib/format'
@@ -55,7 +56,7 @@ function SampleEstimate({ service }: { service: LandingService }) {
   const keys = service === 'artificial_turf' ? ['artificial_turf'] : ['mowing', 'fertilization', 'aeration']
   const lines = PRICING_ITEMS.filter((i) => keys.includes(i.key)).map((i) => priceLine(i, sqft))
   return (
-    <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-ink shadow-2xl ring-1 ring-black/5">
+    <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-ink shadow-2xl ring-1 ring-black/5 [text-shadow:none]">
       <div className="flex items-center justify-between">
         <p className="eyebrow">Sample estimate</p>
         <span className="chip bg-leaf/15 text-forest">
@@ -76,22 +77,6 @@ function SampleEstimate({ service }: { service: LandingService }) {
         ))}
       </ul>
       <p className="mt-4 border-t border-stone pt-3 text-xs text-muted">Confirmed by a vetted local pro on the first visit.</p>
-    </div>
-  )
-}
-
-function StartQuote({ service, city, onAddress, dark }: { service: LandingService; city?: string; onAddress: (a: GeoResult) => void; dark?: boolean }) {
-  if (service === 'landscaping') {
-    const params = new URLSearchParams({ service: 'landscaping', ...(city ? { city } : {}) })
-    return (
-      <Link to={`/get-quote?${params}`} className="btn-gold h-14 w-full px-8 text-base sm:w-auto">
-        Start my free estimate <ArrowRight className="size-4" />
-      </Link>
-    )
-  }
-  return (
-    <div className={dark ? '' : 'mx-auto max-w-2xl'}>
-      <AddressSearch onSelect={onAddress} buttonLabel="See my price" placeholder="Enter your home address" />
     </div>
   )
 }
@@ -182,12 +167,10 @@ export function LawnQuoteLanding() {
   const city = resolveCity(params.get('city'))
   const copy = LANDING_COPY[service]
   const title = copy.title(city ?? 'Dallas–Fort Worth')
-  // Address picked → `flying` (live map fades in and flies to the house) → `address` (quote tool).
-  const [flying, setFlying] = useState<GeoResult | null>(null)
-  const [tilesReady, setTilesReady] = useState(false)
-  const [address, setAddress] = useState<GeoResult | null>(null)
-  const markTilesReady = useCallback(() => setTilesReady(true), [])
-  const arrive = useCallback(() => setAddress((a) => a ?? flying), [flying])
+  const landscaping = service === 'landscaping'
+  const sectionRef = useRef<HTMLElement>(null)
+  // An address typed in the banner is handed to the quote section (a new id each time).
+  const [addressRequest, setAddressRequest] = useState<{ address: GeoResult; id: number } | null>(null)
 
   useNoIndex(title)
   useEffect(() => {
@@ -195,31 +178,10 @@ export function LawnQuoteLanding() {
     track('page_view')
   }, [service, city])
 
-  const start = (a: GeoResult) => {
-    track('address_entered')
-    setTilesReady(false)
-    setFlying(a)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-  const restart = () => {
-    setAddress(null)
-    setFlying(null)
-    setTilesReady(false)
-  }
-
-  // After an address is picked, the quote tool takes over the page (map → services → price).
-  if (address) {
-    return (
-      <div className="min-h-screen bg-sand/50">
-        <header className="fixed inset-x-0 top-0 z-[1000] border-b border-stone/70 bg-cream/95 backdrop-blur">
-          <div className="container-x flex h-16 items-center justify-between">
-            <Logo to={null} />
-            <CallButton />
-          </div>
-        </header>
-        <InstantQuote address={address} initialItems={copy.quoteItems} onChangeAddress={restart} />
-      </div>
-    )
+  const scrollToSection = () => sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const fromBanner = (address: GeoResult) => {
+    setAddressRequest({ address, id: Date.now() })
+    scrollToSection()
   }
 
   const trust = [
@@ -231,54 +193,31 @@ export function LawnQuoteLanding() {
 
   return (
     <div className="min-h-screen bg-cream">
-      {/* Hero */}
+      {/* Banner: same background as the home page */}
       <section className="relative isolate overflow-hidden bg-forest-900 text-white">
-        {flying && (
-          <div className="absolute inset-0 -z-30">
-            <FlyInMap
-              center={BACKDROP.center}
-              zoom={BACKDROP.zoom}
-              to={[flying.lat, flying.lng]}
-              ready={tilesReady}
-              onTilesReady={markTilesReady}
-              onArrive={arrive}
-            />
-          </div>
-        )}
-        {/* Drawn at exactly one CSS pixel per map pixel and centered, so it lines up with the live map's
-            opening view (widths match BACKDROP; md = Tailwind's 768px breakpoint). */}
-        <picture className={`pointer-events-none absolute inset-0 -z-20 transition-opacity duration-[600ms] ${tilesReady ? 'opacity-0' : ''}`}>
-          <source media="(max-width: 767px)" srcSet={BACKDROP.tall.src} />
-          <img
-            src={BACKDROP.wide.src}
-            alt=""
-            fetchPriority="high"
-            style={{ filter: BACKDROP.filter }}
-            className="absolute top-1/2 left-1/2 h-auto w-[780px] max-w-none -translate-x-1/2 -translate-y-1/2 md:w-[2560px]"
-          />
-        </picture>
-        <div
-          className={`pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-forest-900/80 via-forest-900/45 to-forest-900/10 transition-opacity duration-700 ${
-            flying ? 'opacity-0' : ''
-          }`}
-        />
+        <img src={img.hero} alt="" className="absolute inset-0 -z-10 size-full object-cover" fetchPriority="high" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/40 to-black/30" />
+        {/* The home page's text sits low, over the darkest part; here it's higher, so darken behind it too. */}
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-black/55 via-black/25 to-transparent" />
         <header className="container-x flex h-16 items-center justify-between">
-          <Logo light to={null} />
+          <Logo light />
           <CallButton dark />
         </header>
-        <div
-          className={`container-x grid min-h-[calc(88svh-4rem)] items-center gap-10 pt-6 pb-16 transition-opacity duration-300 [text-shadow:0_1px_12px_rgba(12,28,19,0.7)] lg:grid-cols-[1.4fr_1fr] ${
-            flying ? 'pointer-events-none opacity-0' : ''
-          }`}
-        >
+        <div className="container-x grid min-h-[calc(80svh-4rem)] items-center gap-10 pt-6 pb-16 [text-shadow:0_1px_10px_rgba(0,0,0,0.55)] lg:grid-cols-[1.4fr_1fr]">
           <div>
             <p className="eyebrow text-gold-soft">{copy.eyebrow}</p>
             <h1 className="mt-4 text-4xl leading-[1.05] sm:text-6xl">{title}</h1>
-            <p className="mt-5 max-w-xl text-lg text-white/80">{copy.subtitle}</p>
-            <div className="mt-8 max-w-2xl">
-              <StartQuote service={service} city={city} onAddress={start} dark />
+            <p className="mt-5 max-w-xl text-lg text-white/85">{copy.subtitle}</p>
+            <div className="mt-8 max-w-2xl [text-shadow:none]">
+              {landscaping ? (
+                <button onClick={scrollToSection} className="btn-gold h-14 w-full px-8 text-base sm:w-auto">
+                  Start my free estimate
+                </button>
+              ) : (
+                <AddressSearch onSelect={fromBanner} buttonLabel="See my price" placeholder="Enter your home address" />
+              )}
             </div>
-            <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white/80">
+            <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white/85">
               {['Free & no obligation', 'Vetted local pros', 'No spam calls'].map((t) => (
                 <li key={t} className="flex items-center gap-2">
                   <Check className="size-4 text-gold-soft" /> {t}
@@ -286,29 +225,32 @@ export function LawnQuoteLanding() {
               ))}
             </ul>
           </div>
-          {service !== 'landscaping' && (
+          {!landscaping && (
             <div className="hidden justify-end lg:flex">
               <SampleEstimate service={service} />
             </div>
           )}
         </div>
-        {flying && (
-          <p className="absolute inset-x-0 bottom-8 text-center text-sm font-medium text-white drop-shadow">Finding your home…</p>
+      </section>
+
+      {/* Quote section (like the instant-quote page), or the consultation form for landscaping */}
+      <section ref={sectionRef} id="quote" className="scroll-mt-4 bg-sand/50">
+        {landscaping ? (
+          <div className="container-x py-14">
+            <p className="eyebrow">Request a consultation</p>
+            <h2 className="mt-2 mb-8 text-3xl text-forest-900 sm:text-4xl">Tell us about your project</h2>
+            <ConsultationForm service="landscaping" city={city} showInstantQuote={false} />
+          </div>
+        ) : (
+          <InstantQuote embedded addressRequest={addressRequest} initialItems={copy.quoteItems} />
         )}
-        <a
-          href="#how"
-          className={`absolute bottom-4 left-1/2 hidden -translate-x-1/2 text-white/60 hover:text-white sm:block ${flying ? 'invisible' : ''}`}
-          aria-label="How it works"
-        >
-          <ChevronDown className="size-6" />
-        </a>
       </section>
 
       {/* How it works */}
-      <section id="how" className="container-x py-16 sm:py-20">
+      <section className="container-x py-16 sm:py-20">
         <p className="eyebrow text-center">How it works</p>
         <h2 className="mt-3 text-center text-3xl text-forest-900 sm:text-4xl">
-          {service === 'landscaping' ? 'Three steps to a free estimate' : 'Your price in three steps'}
+          {landscaping ? 'Three steps to a free estimate' : 'Your price in three steps'}
         </h2>
         <ol className="mt-10 grid gap-6 md:grid-cols-3">
           {copy.steps.map(([head, body], i) => (
@@ -319,7 +261,7 @@ export function LawnQuoteLanding() {
             </li>
           ))}
         </ol>
-        {service !== 'landscaping' && (
+        {!landscaping && (
           <div className="mt-10 flex justify-center lg:hidden">
             <SampleEstimate service={service} />
           </div>
@@ -332,11 +274,7 @@ export function LawnQuoteLanding() {
           <PhoneCall className="size-8 text-leaf" />
           <h2 className="mt-4 text-3xl text-forest-900 sm:text-4xl">Rather talk to someone?</h2>
           <p className="mt-3 max-w-md text-muted">
-            Leave your number and a vetted local pro will call you back — usually within one business day. Prefer to call
-            now?{' '}
-            <a href={PHONE_HREF} onClick={() => track('call_clicked')} className="font-semibold text-forest underline-offset-4 hover:underline">
-              {PUBLIC_PHONE}
-            </a>
+            Leave your number and a vetted local pro will call you back — usually within one business day.
           </p>
         </div>
         <CallbackForm service={service} city={city} />
@@ -371,15 +309,27 @@ export function LawnQuoteLanding() {
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section className="bg-forest-900 py-16 text-center text-white sm:py-20">
-        <div className="container-x">
-          <h2 className="text-3xl sm:text-4xl">{service === 'landscaping' ? 'Ready for a free estimate?' : 'Ready to see your price?'}</h2>
-          <p className="mx-auto mt-3 max-w-xl text-white/75">
-            {service === 'landscaping' ? 'It takes about two minutes.' : 'Enter your address — it takes about 60 seconds.'}
-          </p>
-          <div className="mt-8">
-            <StartQuote service={service} city={city} onAddress={start} />
+      {/* Contact */}
+      <section className="bg-forest-900 py-14 text-white">
+        <div className="container-x grid gap-8 sm:grid-cols-3">
+          <div>
+            <p className="eyebrow text-gold-soft">Call us</p>
+            <a href={PHONE_HREF} onClick={() => track('call_clicked')} className="mt-2 flex items-center gap-2 text-lg font-semibold hover:underline">
+              <Phone className="size-5 text-gold-soft" /> {PUBLIC_PHONE}
+            </a>
+          </div>
+          <div>
+            <p className="eyebrow text-gold-soft">Email</p>
+            <a href={`mailto:${PUBLIC_EMAIL}`} className="mt-2 flex items-center gap-2 text-lg font-semibold hover:underline">
+              <Mail className="size-5 text-gold-soft" /> {PUBLIC_EMAIL}
+            </a>
+          </div>
+          <div>
+            <p className="eyebrow text-gold-soft">Service area</p>
+            <p className="mt-2 flex gap-2 text-sm text-white/80">
+              <MapPin className="size-5 shrink-0 text-gold-soft" />
+              <span>Dallas–Fort Worth: {LANDING_CITIES.join(', ')} and surrounding cities.</span>
+            </p>
           </div>
         </div>
       </section>
