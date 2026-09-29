@@ -40,4 +40,4 @@ export function rescore(d: MockDb, lead: Lead, at = new Date().toISOString()) {
 
 /** Deterministic MVP matching: active + serves the ZIP + offers the service. */
 export const contractorMatches = (c: Contractor, lead: Lead) =>
-  c.active && c.service_area.includes(lead.zip_code) && c.services.includes(lead.service)
+  c.active && !!c.approved_at && c.service_area.includes(lead.zip_code) && c.services.includes(lead.service)

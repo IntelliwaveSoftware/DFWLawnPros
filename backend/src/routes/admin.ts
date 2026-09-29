@@ -95,15 +95,25 @@ export const adminRoutes: Routes = {
 
   async 'GET /admin/contractors'(req) {
     requireAdmin(req)
-    return db().contractor.findMany({ orderBy: { created_at: 'desc' } })
+    // Applications waiting for review first, then everyone else, newest first.
+    return db().contractor.findMany({ orderBy: [{ approved_at: { sort: 'desc', nulls: 'first' } }, { created_at: 'desc' }] })
   },
 
+  /** `{ approved: true }` approves an application; `{ active }` pauses or resumes an approved company. */
   async 'PATCH /admin/contractors/{id}'(req) {
-    requireAdmin(req)
+    const user = requireAdmin(req)
     const id = idParam(req)
-    const active = body(req).active
-    if (typeof active !== 'boolean') throw new HttpError(400, 'active must be a boolean')
-    const { count } = await db().contractor.updateMany({ where: { id }, data: { active } })
+    const { active, approved } = body(req)
+    if (active !== undefined && typeof active !== 'boolean') throw new HttpError(400, 'active must be a boolean')
+    if (approved !== undefined && approved !== true) throw new HttpError(400, 'approved can only be set to true')
+    if (active === undefined && approved === undefined) throw new HttpError(400, 'Nothing to update')
+    const { count } = await db().contractor.updateMany({
+      where: { id },
+      data: {
+        ...(approved ? { approved_at: new Date(), approved_by: user.email, active: true } : {}),
+        ...(active !== undefined ? { active } : {}),
+      },
+    })
     if (!count) throw new HttpError(404, 'Contractor not found')
     return json(204)
   },

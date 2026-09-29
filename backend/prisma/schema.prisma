@@ -131,6 +131,9 @@ model Contractor {
   service_area       String[] @default([])
   services           String[] @default([])
   active             Boolean  @default(true)
+  /// Set when an admin approves the application. Until then the company can't see or buy leads.
+  approved_at        DateTime? @db.Timestamptz(3)
+  approved_by        String?
   stripe_customer_id String?
   created_at         DateTime @default(now()) @db.Timestamptz(3)
   updated_at         DateTime @updatedAt @db.Timestamptz(3)

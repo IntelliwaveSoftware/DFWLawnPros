@@ -1,6 +1,6 @@
-import { ArrowRight, MapPin } from 'lucide-react'
+import { ArrowRight, Clock, MapPin } from 'lucide-react'
 import { Link } from 'react-router'
-import { api } from '@/api'
+import { api, isUnderReview } from '@/api'
 import { Empty, ErrorBox, Loading, PageHeader, ScoreBadge, useAsync } from '@/components/dashboard/ui'
 import { budgetLabel, serviceLabel, timeframeLabel } from '@/lib/catalog'
 import { date, money } from '@/lib/format'
@@ -12,6 +12,22 @@ function NeedsProfile() {
       <p className="font-semibold text-ink">Set up your company profile to start receiving leads.</p>
       <Link to="/contractor/profile" className="btn-primary mt-4">
         Complete profile
+      </Link>
+    </Empty>
+  )
+}
+
+function UnderReview() {
+  return (
+    <Empty>
+      <Clock className="mx-auto mb-3 size-8 text-gold" />
+      <p className="font-semibold text-ink">Your application is under review</p>
+      <p className="mx-auto mt-2 max-w-md">
+        We review every company before it joins the network and will email you once you’re approved. Matching leads
+        will appear here after that.
+      </p>
+      <Link to="/contractor/profile" className="btn-outline mt-5">
+        Review your profile
       </Link>
     </Empty>
   )
@@ -68,6 +84,8 @@ function LeadList({ load, empty, title, subtitle }: { load: () => Promise<Contra
       <PageHeader title={title} subtitle={subtitle} />
       {needsProfile ? (
         <NeedsProfile />
+      ) : isUnderReview(error) ? (
+        <UnderReview />
       ) : error ? (
         <ErrorBox message={error} />
       ) : loading && !data ? (

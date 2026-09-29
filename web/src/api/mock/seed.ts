@@ -118,28 +118,28 @@ export function buildSeed(rules: ScoringRules): MockDb {
       email: DEMO_CONTRACTOR.email, phone: '(972) 555-0101',
       service_area: zipsFor('Plano', 'Frisco', 'Allen', 'McKinney', 'Prosper', 'Richardson'),
       services: ['lawn_care', 'sod', 'irrigation', 'landscaping', 'hardscaping'],
-      active: true, created_at: new Date(now - 90 * day).toISOString(),
+      active: true, approved_at: new Date(now - (90 - 1) * day).toISOString(), created_at: new Date(now - 90 * day).toISOString(),
     },
     {
       id: 'c-lonestar', company_name: 'Crawford Signature Spaces', contact_name: 'Tarrence Crawford',
       email: 'lonestar@demo.com', phone: '(214) 555-0102',
       service_area: zipsFor('Dallas', 'Richardson', 'Plano', 'Coppell', 'Irving'),
       services: ['hardscaping', 'landscape_design', 'landscaping', 'artificial_turf', 'other'],
-      active: true, created_at: new Date(now - 80 * day).toISOString(),
+      active: true, approved_at: new Date(now - (80 - 1) * day).toISOString(), created_at: new Date(now - 80 * day).toISOString(),
     },
     {
       id: 'c-trinity', company_name: 'Trinity Tree & Turf', contact_name: 'Rob Castillo',
       email: 'trinity@demo.com', phone: '(817) 555-0103',
       service_area: zipsFor('Fort Worth', 'Arlington', 'Southlake', 'Flower Mound'),
       services: ['tree_shrub', 'artificial_turf', 'lawn_care', 'sod', 'landscaping'],
-      active: true, created_at: new Date(now - 70 * day).toISOString(),
+      active: true, approved_at: new Date(now - (70 - 1) * day).toISOString(), created_at: new Date(now - 70 * day).toISOString(),
     },
     {
       id: 'c-prairie', company_name: 'Prairie Irrigation Co.', contact_name: 'Jen Holt',
       email: 'prairie@demo.com', phone: '(469) 555-0104',
       service_area: DFW_ZIPS.map((z) => z.zip),
       services: ['irrigation'],
-      active: false, created_at: new Date(now - 60 * day).toISOString(),
+      active: false, approved_at: new Date(now - (60 - 1) * day).toISOString(), created_at: new Date(now - 60 * day).toISOString(),
     },
   ]
   d.contractors = contractors

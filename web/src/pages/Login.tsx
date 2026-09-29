@@ -76,7 +76,7 @@ export function Login() {
           {role === 'contractor' ? (
             <>
               <Link to="/contractor/signup" className="hover:text-forest">
-                New company? Join the network
+                New company? Apply to join
               </Link>
               <Link to="/login?role=admin" className="hover:text-forest">
                 Admin

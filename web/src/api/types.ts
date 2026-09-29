@@ -12,7 +12,7 @@ import type {
   ScoringRules,
 } from '@/lib/types'
 
-export type ContractorProfileInput = Omit<Contractor, 'id' | 'created_at' | 'active'>
+export type ContractorProfileInput = Omit<Contractor, 'id' | 'created_at' | 'active' | 'approved_at' | 'approved_by'>
 export type OutcomeInput = Omit<LeadOutcome, 'id' | 'lead_id' | 'contractor_id' | 'updated_at'>
 
 /**
@@ -30,6 +30,7 @@ export interface Api {
   getAnalytics(): Promise<Analytics>
   listContractors(): Promise<Contractor[]>
   setContractorActive(id: string, active: boolean): Promise<void>
+  approveContractor(id: string): Promise<void>
   getScoringRules(): Promise<ScoringRules>
   updateScoringRules(rules: ScoringRules): Promise<ScoringRules>
 
@@ -50,3 +51,7 @@ export class ApiError extends Error {
     this.status = status
   }
 }
+
+/** What the API says to a company whose application hasn't been approved yet (matches the Lambda). */
+export const UNDER_REVIEW = 'Your application is under review. We’ll email you once your company is approved.'
+export const isUnderReview = (message: string | null | undefined) => /under review/i.test(message ?? '')

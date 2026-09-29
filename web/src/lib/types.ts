@@ -119,6 +119,9 @@ export interface Contractor {
   service_area: string[]
   services: ServiceKey[]
   active: boolean
+  /** Null while the application is under review; the company can't see or buy leads until then. */
+  approved_at: string | null
+  approved_by?: string | null
   created_at: string
 }
 

@@ -25,13 +25,21 @@ async function myContractor(req: Request): Promise<Contractor> {
   return c
 }
 
+export const UNDER_REVIEW = 'Your application is under review. We’ll email you once your company is approved.'
+
+/** New companies apply first: leads stay hidden until an admin approves them. */
+function requireApproved(c: Contractor): Contractor {
+  if (!c.approved_at) throw new HttpError(403, UNDER_REVIEW)
+  return c
+}
+
 /**
- * Deterministic MVP matching: the lead is available, the contractor is active, serves the
+ * Deterministic MVP matching: the lead is available, the contractor is approved and active, serves the
  * lead's ZIP and offers the service, and (exclusive model) nobody holds a live purchase.
  */
 const matchingLeads = (c: Contractor): Prisma.LeadWhereInput => ({
   status: 'available',
-  zip_code: { in: c.active ? c.service_area : [] },
+  zip_code: { in: c.active && c.approved_at ? c.service_area : [] },
   service: { in: c.services },
   ...(EXCLUSIVE_LEADS ? { purchases: { none: LIVE_PURCHASE } } : {}),
 })
@@ -103,7 +111,7 @@ export const contractorRoutes: Routes = {
   },
 
   async 'GET /contractor/leads/available'(req) {
-    const c = await myContractor(req)
+    const c = requireApproved(await myContractor(req))
     const leads = await db().lead.findMany({
       where: matchingLeads(c),
       include: withSummary,
@@ -144,6 +152,7 @@ export const contractorRoutes: Routes = {
     if (!lead) throw new HttpError(404, 'Lead not found')
     const mine = lead.purchases.length > 0
     if (!mine) {
+      requireApproved(c)
       const available = await db().lead.count({ where: { id, ...matchingLeads(c) } })
       if (!available) throw new HttpError(404, 'This lead is no longer available')
       await addEvent(id, 'presented', c.id)
@@ -152,7 +161,7 @@ export const contractorRoutes: Routes = {
   },
 
   async 'POST /contractor/leads/{id}/purchase'(req) {
-    const c = await myContractor(req)
+    const c = requireApproved(await myContractor(req))
     const id = idParam(req)
     const lead = await db().lead.findFirst({ where: { id, ...matchingLeads(c) } })
     if (!lead) throw new HttpError(409, 'This lead is no longer available')

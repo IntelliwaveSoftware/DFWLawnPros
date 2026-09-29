@@ -31,7 +31,8 @@ export interface MockDb {
 }
 
 const KEY = 'dfwlp.mockdb'
-const DB_VERSION = 1
+// Bump when the stored shape changes; older browser data is replaced with a fresh seed.
+const DB_VERSION = 2
 let memory: MockDb | null = null
 
 export function db(): MockDb {

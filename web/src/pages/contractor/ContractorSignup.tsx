@@ -63,9 +63,9 @@ export function ContractorSignup() {
           <div className="mb-6 lg:hidden">
             <Logo />
           </div>
-          <h2 className="text-3xl text-forest-900">{needsCode ? 'Check your email' : 'Join the network'}</h2>
+          <h2 className="text-3xl text-forest-900">{needsCode ? 'Check your email' : 'Apply to join'}</h2>
           <p className="text-sm text-muted">
-            {needsCode ? `Enter the verification code we sent to ${form.email}.` : 'Create your account, then set up your company profile.'}
+            {needsCode ? `Enter the verification code we sent to ${form.email}.` : 'Create your account, then tell us about your company. We review every application before granting access to leads.'}
           </p>
           {needsCode ? (
             <input className="input" placeholder="Verification code" value={code} onChange={(e) => setCode(e.target.value)} required />

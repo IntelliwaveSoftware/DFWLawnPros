@@ -44,6 +44,12 @@ async function call(
   return { status: res.statusCode, body: res.body ? JSON.parse(res.body) : null }
 }
 
+/** Admin approval, which every new company needs before it can see or buy leads. */
+async function approve(contractorId: string) {
+  const res = await call('PATCH /admin/contractors/{id}', { claims: ADMIN, params: { id: contractorId }, body: { approved: true } })
+  expect(res.status).toBe(204)
+}
+
 const LEAD = {
   name: 'Maria Gonzalez',
   email: 'maria@example.com',
@@ -142,9 +148,24 @@ describe('lead lifecycle', () => {
     expect((await call('GET /contractor/leads/available', { claims: C1 })).status).toBe(409)
     expect((await call('GET /contractor/profile', { claims: C1 })).body).toBeNull()
     const profile = { company_name: 'Greenline', services: ['hardscaping'], service_area: ['75024'], phone: '1' }
-    expect((await call('PUT /contractor/profile', { claims: C1, body: profile })).status).toBe(200)
-    await call('PUT /contractor/profile', { claims: C2, body: { ...profile, company_name: 'Rival' } })
-    await call('PUT /contractor/profile', { claims: C3, body: { ...profile, company_name: 'Far', service_area: ['76107'] } })
+    const applied = await call('PUT /contractor/profile', { claims: C1, body: profile })
+    expect(applied.status).toBe(200)
+    expect(applied.body.approved_at).toBeNull()
+    const c2 = await call('PUT /contractor/profile', { claims: C2, body: { ...profile, company_name: 'Rival' } })
+    const c3 = await call('PUT /contractor/profile', { claims: C3, body: { ...profile, company_name: 'Far', service_area: ['76107'] } })
+
+    // New companies are applications: no leads, and no way to buy one, until an admin approves them.
+    const pending = await call('GET /contractor/leads/available', { claims: C1 })
+    expect(pending.status).toBe(403)
+    expect(pending.body.message).toMatch(/under review/)
+    expect((await call('GET /contractor/leads/{id}', { claims: C1, params: { id: leadId } })).status).toBe(403)
+    expect((await call('POST /contractor/leads/{id}/purchase', { claims: C1, params: { id: leadId } })).status).toBe(403)
+    const approveSelf = await call('PATCH /admin/contractors/{id}', { claims: C1, params: { id: applied.body.id }, body: { approved: true } })
+    expect(approveSelf.status).toBe(403)
+    for (const id of [applied.body.id, c2.body.id, c3.body.id]) await approve(id)
+    const approvedProfile = await call('GET /contractor/profile', { claims: C1 })
+    expect(approvedProfile.body.approved_at).not.toBeNull()
+    expect(approvedProfile.body.approved_by).toBe(ADMIN.email)
 
     // Matching: C1 and C2 match; C3 (other ZIP) doesn't. Contact details are withheld.
     const avail = await call('GET /contractor/leads/available', { claims: C1 })
@@ -269,10 +290,11 @@ describe('lead lifecycle', () => {
     expect(detail.body.lead.score).toBe(75)
 
     // Contractors see the lead, and after purchase get a null phone rather than an error.
-    await call('PUT /contractor/profile', {
+    const profile = await call('PUT /contractor/profile', {
       claims: C1,
       body: { company_name: 'Greenline', services: ['hardscaping'], service_area: ['75024'] },
     })
+    await approve(profile.body.id)
     await call('POST /contractor/leads/{id}/purchase', { claims: C1, params: { id: created.body.id } })
     const view = await call('GET /contractor/leads/{id}', { claims: C1, params: { id: created.body.id } })
     expect(view.body.phone).toBeNull()

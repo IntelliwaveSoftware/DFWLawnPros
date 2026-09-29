@@ -66,7 +66,9 @@ async function main() {
 
   const contractors = []
   for (const c of CONTRACTORS) {
-    contractors.push(await prisma.contractor.upsert({ where: { cognito_sub: c.cognito_sub }, create: c, update: c }))
+    // Demo companies are already approved; new sign-ups through the portal start as applications.
+    const approved = { ...c, approved_at: new Date(), approved_by: 'seed' }
+    contractors.push(await prisma.contractor.upsert({ where: { cognito_sub: c.cognito_sub }, create: approved, update: approved }))
   }
 
   const now = Date.now()

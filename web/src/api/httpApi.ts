@@ -38,6 +38,7 @@ export const httpApi: Api = {
   getAnalytics: () => request('GET', '/admin/analytics'),
   listContractors: () => request('GET', '/admin/contractors'),
   setContractorActive: (id, active) => request('PATCH', `/admin/contractors/${id}`, { active }),
+  approveContractor: (id) => request('PATCH', `/admin/contractors/${id}`, { approved: true }),
   getScoringRules: () => request('GET', '/admin/scoring-rules'),
   updateScoringRules: (rules) => request('PUT', '/admin/scoring-rules', rules),
 

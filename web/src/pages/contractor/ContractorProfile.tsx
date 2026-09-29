@@ -69,11 +69,17 @@ export function ContractorProfile() {
         title="Company profile"
         subtitle={
           params.get('welcome') || !data
-            ? 'Welcome! Tell us what you do and where — we’ll only show you leads that match.'
+            ? 'Tell us about your company, what you do and where. We review every application before granting access to leads.'
             : 'Leads are matched on your service area, services offered, and active status.'
         }
       />
       {error && <ErrorBox message={error} />}
+      {data && !data.approved_at && (
+        <p className="mb-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-900">
+          <strong>Application under review.</strong> We’ll email {data.email} once your company is approved. You can keep
+          your profile up to date in the meantime.
+        </p>
+      )}
       <form onSubmit={onSubmit} className="space-y-6">
         <Panel title="Company">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -121,7 +127,7 @@ export function ContractorProfile() {
             />
             <span className="mt-1 block text-xs text-muted">Separate with commas, spaces or new lines.</span>
           </label>
-          {data && !data.active && (
+          {data?.approved_at && !data.active && (
             <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
               Your account is currently inactive, so you won’t be matched with new leads. Contact support to reactivate.
             </p>
@@ -129,7 +135,7 @@ export function ContractorProfile() {
         </Panel>
         {msg && <p className="text-sm text-forest">{msg}</p>}
         <button className="btn-primary" disabled={saving}>
-          {saving && <Loader2 className="size-4 animate-spin" />} Save profile
+          {saving && <Loader2 className="size-4 animate-spin" />} {data ? 'Save profile' : 'Submit application'}
         </button>
       </form>
     </>

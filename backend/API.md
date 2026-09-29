@@ -24,8 +24,8 @@ the client is [`web/src/api/httpApi.ts`](../web/src/api/httpApi.ts). Money field
 | GET | `/admin/leads/{id}` | `LeadDetail` — lead, enrichment, purchases, outcomes, lifecycle events |
 | PATCH | `/admin/leads/{id}` | `{ status }` → `204`; logs a `status_changed` event |
 | GET | `/admin/analytics` | `Analytics` — totals, breakdowns, 30-day series, lifecycle funnel, contractor activity |
-| GET | `/admin/contractors` | `Contractor[]` |
-| PATCH | `/admin/contractors/{id}` | `{ active }` → `204` |
+| GET | `/admin/contractors` | `Contractor[]`, applications awaiting review (`approved_at: null`) first |
+| PATCH | `/admin/contractors/{id}` | `{ approved: true }` approves an application (sets `approved_at`, `approved_by`); `{ active }` pauses or resumes an approved company → `204` |
 | GET | `/admin/scoring-rules` | Active `ScoringRules` (seeded from `shared/scoring-rules.json` on first call) |
 | PUT | `/admin/scoring-rules` | `ScoringRules` → new active version; re-scores all `new`/`available` leads |
 
@@ -34,8 +34,8 @@ the client is [`web/src/api/httpApi.ts`](../web/src/api/httpApi.ts). Money field
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/contractor/profile` | `Contractor` or empty body when no profile exists yet |
-| PUT | `/contractor/profile` | `{ company_name, contact_name, email, phone, services[], service_area[] }` (upsert by Cognito `sub`) |
-| GET | `/contractor/leads/available` | Matched leads (active + ZIP in service area + service offered + unsold). Contact details withheld. |
+| PUT | `/contractor/profile` | `{ company_name, contact_name, email, phone, services[], service_area[] }` (upsert by Cognito `sub`). A new profile is an application: `approved_at` stays `null` until an admin approves it. |
+| GET | `/contractor/leads/available` | Matched leads (approved + active + ZIP in service area + service offered + unsold). Contact details withheld. `403` "under review" until the company is approved (also for lead detail and purchase). |
 | GET | `/contractor/leads/purchased` | Purchased leads with full contact details and current outcome |
 | GET | `/contractor/leads/{id}` | `ContractorLeadView` |
 | POST | `/contractor/leads/{id}/purchase` | `{ purchase, checkout_url }`. `409` if someone else got it first. With Stripe configured, redirect to `checkout_url`. |

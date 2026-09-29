@@ -10,7 +10,7 @@ import type {
   LeadListItem,
   LeadOutcome,
 } from '@/lib/types'
-import { ApiError, type Api } from '../types'
+import { ApiError, UNDER_REVIEW, type Api } from '../types'
 import { contractorMatches, ingestLead, pushEvent, rescore } from './pipeline'
 import { db, persist } from './store'
 
@@ -41,6 +41,13 @@ function myContractor() {
   const user = requireRole('contractor')
   const c = db().contractors.find((x) => x.id === user.id)
   if (!c) throw new ApiError(409, 'Complete your company profile first')
+  return c
+}
+
+/** Same rule as the Lambda: applications see no leads until an admin approves them. */
+function myApprovedContractor() {
+  const c = myContractor()
+  if (!c.approved_at) throw new ApiError(403, UNDER_REVIEW)
   return c
 }
 
@@ -262,6 +269,14 @@ export const mockApi: Api = {
     persist()
   },
 
+  async approveContractor(id) {
+    const admin = requireRole('admin')
+    const c = db().contractors.find((x) => x.id === id)
+    if (!c) throw new ApiError(404, 'Contractor not found')
+    Object.assign(c, { approved_at: now(), approved_by: admin.email, active: true })
+    persist()
+  },
+
   async getScoringRules() {
     requireRole('admin')
     return clone(db().scoring_rules)
@@ -291,7 +306,7 @@ export const mockApi: Api = {
     let c = d.contractors.find((x) => x.id === user.id)
     if (c) Object.assign(c, input)
     else {
-      c = { ...input, id: user.id, active: true, created_at: now() }
+      c = { ...input, id: user.id, active: true, approved_at: null, created_at: now() }
       d.contractors.push(c)
     }
     persist()
@@ -299,7 +314,7 @@ export const mockApi: Api = {
   },
 
   async listAvailableLeads() {
-    const c = myContractor()
+    const c = myApprovedContractor()
     await delay()
     const d = db()
     const leads = d.leads.filter((l) => isAvailableTo(l, c.id))
@@ -326,6 +341,7 @@ export const mockApi: Api = {
     const d = db()
     const lead = findLead(id)
     const view = toContractorView(lead, c.id)
+    if (!view.purchased_by_me && !c.approved_at) throw new ApiError(403, UNDER_REVIEW)
     if (!view.purchased_by_me && !isAvailableTo(lead, c.id)) throw new ApiError(404, 'This lead is no longer available')
     if (!view.purchased_by_me && !d.events.some((e) => e.lead_id === id && e.type === 'presented' && e.contractor_id === c.id)) {
       pushEvent(d, id, 'presented', now(), c.id)
@@ -335,7 +351,7 @@ export const mockApi: Api = {
   },
 
   async purchaseLead(id) {
-    const c = myContractor()
+    const c = myApprovedContractor()
     await delay(500)
     const d = db()
     const lead = findLead(id)

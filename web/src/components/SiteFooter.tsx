@@ -40,11 +40,12 @@ export function SiteFooter() {
         <div>
           <h3 className="mb-4 font-sans text-sm font-semibold tracking-wide text-white uppercase">For Landscaping Companies</h3>
           <p className="mb-4 text-sm leading-relaxed">
-            Get exclusive, pre-qualified lawn care and landscaping leads in the ZIP codes you serve.
+            We partner with a select few vetted companies in each area. Approved partners receive exclusive,
+            pre-qualified leads.
           </p>
           <div className="flex flex-col items-start gap-2 text-sm">
             <Link to="/contractor/signup" className="btn-gold btn-sm">
-              Join the network
+              Apply to join
             </Link>
             <Link to="/login?role=contractor" className="hover:text-white">
               Contractor login
