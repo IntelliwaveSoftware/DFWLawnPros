@@ -3,8 +3,11 @@ import turfArea from '@turf/area'
 
 export type LatLng = [number, number]
 
-/** Zoom the quote map opens at on a home. The landing fly-in lands on the same zoom so its tiles are reused. */
-export const HOME_ZOOM = 20
+/**
+ * Zoom the quote map opens at on a home: the house plus its front and back yards. The landing fly-in lands
+ * on the same zoom so its tiles are reused.
+ */
+export const HOME_ZOOM = 19
 
 const SQFT_PER_M2 = 10.7639
 
