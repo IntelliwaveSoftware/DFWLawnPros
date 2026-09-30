@@ -74,8 +74,16 @@ jobs:
 
       # Migrations run before the new code ships, so keep them backward compatible
       # (add columns first, drop them in a later release).
+      # Aurora Serverless pauses when idle and takes ~15 s to resume, so retry while it wakes up
+      # (the first attempt is what wakes it).
       - name: Apply database migrations
-        run: npx prisma migrate deploy
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            npx prisma migrate deploy && exit 0
+            echo "Database not reachable yet (attempt $attempt); retrying in 10 s…"
+            sleep 10
+          done
+          exit 1
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
