@@ -42,6 +42,7 @@ export async function saveRules(rules: StoredRules, createdBy: string): Promise<
 export async function rescore(leadId: string, rules?: ScoringRules): Promise<ScoreBreakdown> {
   rules ??= await activeRules()
   const lead = await db().lead.findUniqueOrThrow({ where: { id: leadId }, include: { enrichment: true } })
+  const previous = lead.score_breakdown as unknown as ScoreBreakdown | null
   const e = lead.enrichment
   const breakdown = scoreLead(
     rules,
@@ -57,6 +58,10 @@ export async function rescore(leadId: string, rules?: ScoringRules): Promise<Sco
       ...(lead.status === 'new' ? { status: 'available' } : {}),
     },
   })
-  await addEvent(leadId, 'scored', null, { score: breakdown.score, rules_version: breakdown.rules_version })
+  // Log a score only when it's new or changed (e.g. enrichment added facts, or the rules changed), so a
+  // re-score that lands on the same number doesn't show up as a duplicate in the lead's lifecycle.
+  if (!previous || previous.score !== breakdown.score || previous.rules_version !== breakdown.rules_version) {
+    await addEvent(leadId, 'scored', null, { score: breakdown.score, rules_version: breakdown.rules_version })
+  }
   return breakdown
 }

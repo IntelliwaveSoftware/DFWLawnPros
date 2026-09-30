@@ -292,7 +292,8 @@ describe('lead lifecycle', () => {
     expect(detail.body.enrichment).toBeNull()
     expect(detail.body.lead.status).toBe('available')
     expect(detail.body.lead.score).toBe(70)
-    expect(detail.body.events.filter((e: { type: string }) => e.type === 'scored')).toHaveLength(2)
+    // Scored on intake; the post-enrichment re-score lands on the same number, so it isn't logged again.
+    expect(detail.body.events.filter((e: { type: string }) => e.type === 'scored')).toHaveLength(1)
     expect(errorLog).toHaveBeenCalled()
     errorLog.mockRestore()
   })

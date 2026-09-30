@@ -32,10 +32,14 @@ export function ingestLead(d: MockDb, lead: Lead) {
 export function rescore(d: MockDb, lead: Lead, at = new Date().toISOString()) {
   const enrichment = d.enrichments.find((e) => e.lead_id === lead.id) ?? null
   const breakdown = { ...scoreLead(d.scoring_rules, lead, enrichment), calculated_at: at }
+  const previous = lead.score_breakdown
   lead.score = breakdown.score
   lead.score_breakdown = breakdown
   lead.updated_at = at
-  pushEvent(d, lead.id, 'scored', at, null, { score: breakdown.score, rules_version: breakdown.rules_version })
+  // Same rule as the Lambda: only log a score that's new or changed.
+  if (!previous || previous.score !== breakdown.score || previous.rules_version !== breakdown.rules_version) {
+    pushEvent(d, lead.id, 'scored', at, null, { score: breakdown.score, rules_version: breakdown.rules_version })
+  }
 }
 
 /** Deterministic MVP matching: active + serves the ZIP + offers the service. */
