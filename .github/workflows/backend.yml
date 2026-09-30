@@ -1,9 +1,10 @@
-# Tests the API on every pull request; on main, migrates the database and deploys the Lambda stack.
+# Tests the API on every pull request; on main (production) or develop (dev), migrates the database and
+# deploys the Lambda stack.
 name: Backend
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths: ['backend/**', 'shared/**', '.github/workflows/backend.yml']
   pull_request:
     paths: ['backend/**', 'shared/**', '.github/workflows/backend.yml']
@@ -49,9 +50,11 @@ jobs:
 
   deploy:
     needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    # main deploys to production, develop to the private dev environment (each GitHub environment has its
+    # own AWS role, stacks, keys and secrets, and only accepts deploys from its own branch).
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
     permissions:
       contents: read
       id-token: write
@@ -97,6 +100,8 @@ jobs:
           ANTHROPIC_AWS_WORKSPACE_ID: ${{ vars.ANTHROPIC_AWS_WORKSPACE_ID }}
           # A secret rather than a variable: this repo is public, and variables appear in its Actions logs.
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          # Dev only: the API then requires this token (X-Dev-Access) on every request.
+          API_ACCESS_TOKEN: ${{ secrets.API_ACCESS_TOKEN }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           SITE_URL: ${{ vars.SITE_URL }}
@@ -107,6 +112,7 @@ jobs:
             "SiteUrl=$SITE_URL"
             "AllowedOrigins=$ALLOWED_ORIGINS"
           )
+          [ -n "$API_ACCESS_TOKEN" ] && params+=("ApiAccessToken=$API_ACCESS_TOKEN")
           # Optional: the first dashboard admin, invited by email on the deploy that adds it.
           [ -n "$ADMIN_EMAIL" ] && params+=("AdminEmail=$ADMIN_EMAIL")
           # Optional: without a workspace, leads are scored but not AI-enriched.

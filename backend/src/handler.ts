@@ -3,6 +3,7 @@
 // Handles two kinds of events:
 //   * API Gateway HTTP API (v2) requests → routed by `routeKey`
 //   * { task: "enrich", lead_id } → async LLM enrichment, self-invoked after lead intake
+import { timingSafeEqual } from 'node:crypto'
 import type { APIGatewayProxyEventV2 } from 'aws-lambda'
 import { db } from './db.js'
 import { enrichLead } from './enrichment.js'
@@ -28,11 +29,24 @@ export const routes: Routes = { ...leadRoutes, ...adminRoutes, ...contractorRout
 
 type EnrichTask = { task: 'enrich'; lead_id: string }
 
+/**
+ * Non-public environments set API_ACCESS_TOKEN; requests must then carry it in X-Dev-Access. Stripe can't
+ * send it, and its webhook is verified by signature instead.
+ */
+function hasApiAccess(event: APIGatewayProxyEventV2): boolean {
+  const token = process.env.API_ACCESS_TOKEN
+  if (!token || event.routeKey === 'POST /webhooks/stripe') return true
+  const sent = Buffer.from(event.headers?.['x-dev-access'] ?? '')
+  const expected = Buffer.from(token)
+  return sent.length === expected.length && timingSafeEqual(sent, expected)
+}
+
 export async function handler(event: APIGatewayProxyEventV2 | EnrichTask): Promise<Result | void> {
   if ('task' in event) {
     if (event.task === 'enrich') await enrichLead(event.lead_id)
     return
   }
+  if (!hasApiAccess(event)) return json(403, { message: 'Forbidden' })
   try {
     return await dispatch(routes, event)
   } catch (error) {

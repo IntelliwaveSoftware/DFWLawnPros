@@ -5,7 +5,8 @@
   "anthropicWorkspaceId": "wrkspc_01CcxyxiRUVpnTWrLusTBTDX",
   "github": {
     "repo": "IntelliwaveSoftware/DFWLawnPros",
-    "environment": "production"
+    "environment": "production",
+    "branch": "main"
   },
   "buckets": {
     "site": "dfwlawnpros.com",

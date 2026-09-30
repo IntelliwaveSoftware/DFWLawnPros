@@ -97,6 +97,25 @@ beforeEach(async () => {
 
 afterAll(disconnect)
 
+describe('API access token (non-public environments)', () => {
+  it('requires X-Dev-Access when API_ACCESS_TOKEN is set, except for the Stripe webhook', async () => {
+    vi.stubEnv('API_ACCESS_TOKEN', 'dev-token-123')
+    const event = (routeKey: string, headers: Record<string, string> = {}) =>
+      ({
+        routeKey,
+        rawPath: routeKey.split(' ')[1],
+        requestContext: { http: { method: routeKey.split(' ')[0], sourceIp: '127.0.0.1' } },
+        headers,
+      }) as unknown as APIGatewayProxyEventV2
+    expect((await handler(event('GET /warmup')))?.statusCode).toBe(403)
+    expect((await handler(event('GET /warmup', { 'x-dev-access': 'wrong' })))?.statusCode).toBe(403)
+    expect((await handler(event('GET /warmup', { 'x-dev-access': 'dev-token-123' })))?.statusCode).toBe(204)
+    expect((await handler(event('POST /webhooks/stripe')))?.statusCode).not.toBe(403)
+    vi.unstubAllEnvs()
+    expect((await handler(event('GET /warmup')))?.statusCode).toBe(204) // production: no token configured
+  })
+})
+
 describe('warmup', () => {
   it('touches the database and returns no content', async () => {
     const spy = vi.spyOn(db(), '$queryRaw')

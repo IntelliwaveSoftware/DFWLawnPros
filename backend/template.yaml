@@ -7,6 +7,14 @@ Parameters:
     Type: String
     NoEcho: true
     Description: postgresql://user:password@host:5432/dbname (RDS / Aurora PostgreSQL)
+  ApiAccessToken:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: >-
+      Non-public environments only: every API request (except the Stripe webhook) must send this value in the
+      X-Dev-Access header. The dev web build includes it, and only visitors who pass the dev site's IP/password
+      gate receive that build. Empty = public API (production).
   AdminEmail:
     Type: String
     Default: ''
@@ -158,7 +166,7 @@ Resources:
     Properties:
       CorsConfiguration:
         AllowOrigins: !Ref AllowedOrigins
-        AllowHeaders: [authorization, content-type]
+        AllowHeaders: [authorization, content-type, x-dev-access]
         AllowMethods: [GET, POST, PUT, PATCH, OPTIONS]
         MaxAge: 600
       DefaultRouteSettings:
@@ -194,6 +202,7 @@ Resources:
           DATABASE_URL: !Ref DatabaseUrl
           # Claude Platform on AWS; AWS_REGION is set by Lambda itself.
           ANTHROPIC_AWS_WORKSPACE_ID: !Ref AnthropicWorkspaceId
+          API_ACCESS_TOKEN: !Ref ApiAccessToken
           ENRICHMENT_MODEL: !Ref EnrichmentModel
           STRIPE_SECRET_KEY: !Ref StripeSecretKey
           STRIPE_WEBHOOK_SECRET: !Ref StripeWebhookSecret

@@ -5,6 +5,13 @@ export const API_BASE_URL = (env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 export const USE_MOCK_API = !API_BASE_URL
 
 /**
+ * Non-public environments only (the dev site): sent as X-Dev-Access on every API request. The dev build is
+ * only served to visitors who pass the dev site's IP/password gate, which is what keeps it private.
+ */
+export const API_ACCESS_TOKEN = env.VITE_API_ACCESS_TOKEN ?? ''
+export const apiAccessHeaders = (): Record<string, string> => (API_ACCESS_TOKEN ? { 'X-Dev-Access': API_ACCESS_TOKEN } : {})
+
+/**
  * How staff sign in when a real API is configured.
  *  - 'cognito' (default): Amazon Cognito.
  *  - 'local': password-less sign-in that issues unsigned tokens accepted only by the local dev server

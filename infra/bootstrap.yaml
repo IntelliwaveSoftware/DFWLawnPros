@@ -56,6 +56,21 @@ Parameters:
     AllowedValues: ['true', 'false']
     Default: 'true'
     Description: false = ArtifactsBucketName already exists (same account and region) and is reused
+  AllowedIps:
+    Type: String
+    Default: ''
+    AllowedPattern: '^[0-9./,]*$'
+    Description: >-
+      Non-public environments only: comma-separated IPv4 addresses or CIDRs that may open the site without a
+      password. Empty (with an empty SiteAuthSha256) = public site.
+  SiteAuthSha256:
+    Type: String
+    Default: ''
+    NoEcho: true
+    AllowedPattern: '^([0-9a-f]{64})?$'
+    Description: >-
+      Non-public environments only: SHA-256 (hex) of the "Basic ..." Authorization header visitors from other IPs
+      must send (setup.mjs computes it from the username and password). Empty = no password option.
   DomainNames:
     Type: CommaDelimitedList
     Default: ''
@@ -81,6 +96,7 @@ Conditions:
   CreateOidc: !Equals [!Ref CreateOidcProvider, 'true']
   HasSubjectPrefix: !Not [!Equals [!Ref GitHubSubjectPrefix, '']]
   HasDomain: !Not [!Equals [!Ref CertificateArn, '']]
+  Restricted: !Or [!Not [!Equals [!Ref AllowedIps, '']], !Not [!Equals [!Ref SiteAuthSha256, '']]]
   CreateSite: !Equals [!Ref CreateSiteBucket, 'true']
   NamedSite: !Not [!Equals [!Ref SiteBucketName, '']]
   ManageSitePolicy: !Or [!Condition CreateSite, !Equals [!Ref ManageSiteBucketPolicy, 'true']]
@@ -136,17 +152,56 @@ Resources:
 
   # Single-page app: client routes (/portfolio, /admin/leads/…) have no file extension, so serve index.html.
   # Unlike a 403/404 custom error response, real missing assets still return an error.
+  # Non-public environments (AllowedIps / SiteAuthSha256 set) also gate every request here: listed IPs get
+  # straight in, anyone else must sign in with the environment's username and password.
   SpaRewriteFunction:
     Type: AWS::CloudFront::Function
     Properties:
       Name: !Sub ${AWS::StackName}-spa-rewrite
       AutoPublish: true
       FunctionConfig:
-        Comment: Serve index.html for client-side routes
+        Comment: Serve index.html for client-side routes; optional IP/password gate
         Runtime: cloudfront-js-2.0
-      FunctionCode: |
+      FunctionCode: !Sub |
+        import crypto from 'crypto';
+
+        var ALLOWED = '${AllowedIps}'.split(',').filter(function (s) { return s; });
+        var AUTH_SHA256 = '${SiteAuthSha256}';
+
+        function ipToInt(ip) {
+          var p = ip.split('.');
+          if (p.length !== 4) return null;
+          return ((+p[0] << 24) >>> 0) + (+p[1] << 16) + (+p[2] << 8) + +p[3];
+        }
+
+        function ipAllowed(ip) {
+          var n = ipToInt(ip);
+          if (n === null) return false;
+          return ALLOWED.some(function (entry) {
+            var parts = entry.split('/');
+            var base = ipToInt(parts[0]);
+            var bits = parts.length > 1 ? +parts[1] : 32;
+            if (base === null) return false;
+            var mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+            return ((n & mask) >>> 0) === ((base & mask) >>> 0);
+          });
+        }
+
+        function signedIn(request) {
+          var h = request.headers.authorization;
+          return !!(AUTH_SHA256 && h && crypto.createHash('sha256').update(h.value).digest('hex') === AUTH_SHA256);
+        }
+
         function handler(event) {
           var request = event.request;
+          if ((ALLOWED.length || AUTH_SHA256) && !ipAllowed(event.viewer.ip) && !signedIn(request)) {
+            if (!AUTH_SHA256) return { statusCode: 403, statusDescription: 'Forbidden' };
+            return {
+              statusCode: 401,
+              statusDescription: 'Unauthorized',
+              headers: { 'www-authenticate': { value: 'Basic realm="DFW Lawn Pros (development)"' } },
+            };
+          }
           var last = request.uri.split('/').pop();
           if (last.indexOf('.') === -1) request.uri = '/index.html';
           return request;
@@ -160,6 +215,8 @@ Resources:
         Comment: DFW Lawn Pros website
         HttpVersion: http2and3
         PriceClass: PriceClass_100
+        # The IP allow-list is IPv4; serving restricted sites over IPv4 only keeps visitors' addresses matchable.
+        IPV6Enabled: !If [Restricted, false, !Ref AWS::NoValue]
         DefaultRootObject: index.html
         Aliases: !If [HasDomain, !Ref DomainNames, !Ref AWS::NoValue]
         ViewerCertificate: !If
