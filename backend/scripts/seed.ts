@@ -94,7 +94,7 @@ async function main() {
       },
     })
     await addEvent(lead.id, 'generated', null, { source: 'lead_form' })
-    await rescore(lead.id)
+    await rescore(lead.id, { trigger: 'intake' })
   }
 
   // One purchased lead with an outcome, so "My leads" and analytics aren't empty.

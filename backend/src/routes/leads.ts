@@ -120,7 +120,7 @@ export const leadRoutes: Routes = {
     })
     await addEvent(row.id, 'generated', null, { source: lead.source })
     // Score immediately on customer data so the lead is usable even before enrichment lands.
-    await rescore(row.id)
+    await rescore(row.id, { trigger: 'intake' })
     await startEnrichment(row.id)
     return json(201, { id: row.id })
   },
@@ -224,7 +224,7 @@ export const leadRoutes: Routes = {
       user.email,
     )
     const open = await db().lead.findMany({ where: { status: { in: ['new', 'available'] } }, select: { id: true } })
-    for (const { id } of open) await rescore(id, saved)
+    for (const { id } of open) await rescore(id, { trigger: 'rules_change', rules: saved })
     return saved
   },
 }

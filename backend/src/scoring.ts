@@ -1,4 +1,5 @@
 // Persistence around the shared scoring engine (shared/scoring.ts — same code the web app runs).
+import type { ScoredPayload, ScoreTrigger } from '../../shared/lifecycle.js'
 import { scoreLead, type ScoreBreakdown, type ScoringRules } from '../../shared/scoring.js'
 import { DEFAULT_SCORING_RULES } from './config.js'
 import { addEvent, db, isUniqueViolation, type Prisma } from './db.js'
@@ -39,7 +40,15 @@ export async function saveRules(rules: StoredRules, createdBy: string): Promise<
 }
 
 /** Score a lead from its stored data + enrichment and persist the result. */
-export async function rescore(leadId: string, rules?: ScoringRules): Promise<ScoreBreakdown> {
+/**
+ * (Re)score a lead. `trigger` says why; it's stored on the "scored" event, and displayLifecycle
+ * (shared/lifecycle.ts) uses it to hide back-end re-scores from people. `note` describes what changed
+ * for a lead_update.
+ */
+export async function rescore(
+  leadId: string,
+  { trigger, note, rules }: { trigger: ScoreTrigger; note?: string; rules?: ScoringRules },
+): Promise<ScoreBreakdown> {
   rules ??= await activeRules()
   const lead = await db().lead.findUniqueOrThrow({ where: { id: leadId }, include: { enrichment: true } })
   const previous = lead.score_breakdown as unknown as ScoreBreakdown | null
@@ -58,10 +67,17 @@ export async function rescore(leadId: string, rules?: ScoringRules): Promise<Sco
       ...(lead.status === 'new' ? { status: 'available' } : {}),
     },
   })
-  // Log a score only when it's new or changed (e.g. enrichment added facts, or the rules changed), so a
-  // re-score that lands on the same number doesn't show up as a duplicate in the lead's lifecycle.
-  if (!previous || previous.score !== breakdown.score || previous.rules_version !== breakdown.rules_version) {
-    await addEvent(leadId, 'scored', null, { score: breakdown.score, rules_version: breakdown.rules_version })
+  // Record a score when it's new or changed; new information about the lead is always recorded.
+  const changed = !previous || previous.score !== breakdown.score || previous.rules_version !== breakdown.rules_version
+  if (changed || trigger === 'lead_update') {
+    const payload: ScoredPayload = {
+      score: breakdown.score,
+      rules_version: breakdown.rules_version,
+      trigger,
+      previous: previous?.score ?? null,
+      ...(note ? { note: note.slice(0, 200) } : {}),
+    }
+    await addEvent(leadId, 'scored', null, payload as unknown as Prisma.InputJsonValue)
   }
   return breakdown
 }

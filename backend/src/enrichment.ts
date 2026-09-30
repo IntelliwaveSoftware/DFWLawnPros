@@ -147,5 +147,5 @@ export async function enrichLead(leadId: string): Promise<void> {
   }
 
   // Score even when enrichment failed — AI-dependent rules simply don't match.
-  await rescore(leadId)
+  await rescore(leadId, { trigger: 'enrichment' })
 }

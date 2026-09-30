@@ -301,7 +301,7 @@ export const mockApi: Api = {
     const d = db()
     d.scoring_rules = { ...rules, version: d.scoring_rules.version + 1 }
     // Re-score open leads so admins see the effect immediately.
-    d.leads.filter((l) => l.status === 'available' || l.status === 'new').forEach((l) => rescore(d, l))
+    d.leads.filter((l) => l.status === 'available' || l.status === 'new').forEach((l) => rescore(d, l, 'rules_change'))
     persist()
     return clone(d.scoring_rules)
   },

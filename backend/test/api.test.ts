@@ -166,6 +166,11 @@ describe('lead lifecycle', () => {
     expect(detail.body.lead).not.toHaveProperty('ip_address')
     const scored = detail.body.events.filter((e: { type: string }) => e.type === 'scored')
     expect(scored.map((e: { payload: { score: number } }) => e.payload.score)).toEqual([70, 80])
+    // Every raw event is kept, tagged with why it happened (the UI folds background re-scores away).
+    expect(scored.map((e: { payload: { trigger: string; previous: number | null } }) => [e.payload.trigger, e.payload.previous])).toEqual([
+      ['intake', null],
+      ['enrichment', 70],
+    ])
 
     // Admin auth
     expect((await call('GET /admin/leads', { claims: C1 })).status).toBe(403)

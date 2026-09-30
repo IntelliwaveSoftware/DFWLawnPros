@@ -1,4 +1,5 @@
 import { ArrowLeft, Check, X } from 'lucide-react'
+import { displayLifecycle } from '@shared/lifecycle'
 import { Link, useParams } from 'react-router'
 import { api } from '@/api'
 import {
@@ -26,7 +27,9 @@ export function AdminLeadDetail() {
   if (loading && !data) return <Loading />
   if (error) return <ErrorBox message={error} />
   if (!data) return null
-  const { lead, enrichment, purchases, outcomes, events } = data
+  const { lead, enrichment, purchases, outcomes } = data
+  // Background re-scores (enrichment, rule changes) are folded into one score entry; see shared/lifecycle.ts.
+  const events = displayLifecycle(data.events)
 
   const changeStatus = async (status: LeadStatus) => {
     await api.updateLeadStatus(lead.id, status)
@@ -235,7 +238,18 @@ export function AdminLeadDetail() {
                   {e.type === 'status_changed' && e.payload && (
                     <span className="text-muted"> · {String(e.payload.from)} → {String(e.payload.to)}</span>
                   )}
-                  {e.type === 'scored' && e.payload && <span className="text-muted"> · {String(e.payload.score)}</span>}
+                  {e.type === 'scored' && e.payload && (
+                    <span className="text-muted">
+                      {' · '}
+                      {String(e.payload.score)}
+                      {e.payload.trigger === 'lead_update' && (
+                        <>
+                          {e.payload.previous != null && ` (was ${String(e.payload.previous)})`}
+                          {e.payload.note ? ` — ${String(e.payload.note)}` : ''}
+                        </>
+                      )}
+                    </span>
+                  )}
                   <br />
                   <span className="text-xs text-muted">{dateTime(e.created_at)}</span>
                 </li>
