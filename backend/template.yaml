@@ -214,10 +214,10 @@ Resources:
               - Effect: Allow
                 Action: aws-external-anthropic:CreateInference
                 Resource: !Sub arn:aws:aws-external-anthropic:${AWS::Region}:${AWS::AccountId}:workspace/${AnthropicWorkspaceId}
-              # Claude Platform on AWS authenticates each request with an identity token minted for this
-              # role (outbound web identity federation); without this every call is refused with a 403.
+              # Claude Platform on AWS authenticates each request with a tagged identity token minted for
+              # this role (outbound web identity federation); without these every call is refused with a 403.
               - Effect: Allow
-                Action: sts:GetWebIdentityToken
+                Action: [sts:GetWebIdentityToken, sts:TagGetWebIdentityToken]
                 Resource: '*'
           - !Ref AWS::NoValue
       Events:
