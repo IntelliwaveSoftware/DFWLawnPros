@@ -82,6 +82,9 @@ jobs:
       - name: Apply database migrations
         run: |
           # Only an unreachable server (P1001) is worth retrying; other errors (e.g. a malformed URL) fail fast.
+          # pipefail: without it the `| tee` below would report tee's success even when migrate fails
+          # (GitHub runs `run:` steps as `bash -e`, without pipefail, unless a shell is set explicitly).
+          set -o pipefail
           for attempt in 1 2 3 4 5 6; do
             if npx prisma migrate deploy 2>&1 | tee migrate.log; then exit 0; fi
             grep -q 'P1001' migrate.log || exit 1
