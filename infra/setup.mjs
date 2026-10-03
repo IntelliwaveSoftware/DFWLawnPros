@@ -295,8 +295,18 @@ function setGithubVariables(outputs) {
     runOrFail(`Setting ${name}`, 'gh', ['variable', 'set', name, '--repo', repo, '--env', env, '--body', value])
     console.log(`  set ${name}`)
   }
-  console.log(`\nStill to add by hand (secrets): gh secret set DATABASE_URL --repo ${repo} --env ${env}`)
-  console.log(`                                  gh secret set ADMIN_EMAIL --repo ${repo} --env ${env}   (optional: first admin)`)
+  // Only mention secrets this environment doesn't have yet.
+  const have = run('gh', ['secret', 'list', '--repo', repo, '--env', env, '--json', 'name', '--jq', '.[].name']).split('\n')
+  const todo = [
+    ['DATABASE_URL', ''],
+    ['ADMIN_EMAIL', '   (optional: first admin)'],
+  ].filter(([name]) => !have.includes(name))
+  if (todo.length) {
+    console.log('\nStill to add by hand (secrets):')
+    for (const [name, note] of todo) console.log(`  gh secret set ${name} --repo ${repo} --env ${env}${note}`)
+  } else {
+    console.log('\nSecrets: DATABASE_URL and ADMIN_EMAIL are set.')
+  }
 }
 
 async function main() {
