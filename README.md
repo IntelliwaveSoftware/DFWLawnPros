@@ -143,7 +143,7 @@ GitHub gets short-lived AWS credentials through OIDC; no AWS keys are stored in 
 **One-time setup**
 
 1. Edit [infra/config.json](infra/config.json): AWS region, stack names, GitHub repo, and optionally a custom
-   domain (`domain.names` plus an ACM `certificateArn` in us-east-1). Under `buckets`:
+   domain (see **Custom domains** below). Under `buckets`:
 
    | `buckets.site` / `buckets.artifacts` | What setup does |
    | --- | --- |
@@ -205,6 +205,61 @@ GitHub gets short-lived AWS credentials through OIDC; no AWS keys are stored in 
   release, and drop the old one in a later release.
 - Old hashed JS/CSS files stay in the bucket after a deploy, so open tabs can still load their route chunks.
 - If you rename the API stack or the repo, update `infra/config.json` and re-run setup with `--github`.
+
+## Environments: develop → production
+
+| Branch | Deploys to | GitHub environment | AWS stacks | Site |
+| --- | --- | --- | --- | --- |
+| `develop` | development (private) | `development` | `dfwlawnpros-dev-bootstrap`, `dfwlawnpros-dev-api` | IP allow-list or password |
+| `main` | production (public) | `production` | `dfwlawnpros-bootstrap`, `dfwlawnpros-api` | public |
+
+Work on `develop` (or feature branches merged into it); every push there deploys to the dev site. Promote to
+production with a pull request from `develop` into `main`. `main` is protected: changes reach it only through a
+pull request. Each GitHub environment only accepts deploys from its own branch and has its own AWS deploy role
+(which can only touch that environment's stacks), buckets, Cognito users, map key, database and secrets.
+
+**Dev access.** The dev site's CloudFront function lets listed IPv4 addresses straight in and asks everyone else
+for a username and password. The dev API additionally requires a random access token (the `API_ACCESS_TOKEN`
+secret, sent as `X-Dev-Access`), which only the dev build carries, so it's covered by the same gate. None of these
+values are stored in this (public) repo. Update access with:
+
+```bash
+node infra/setup.mjs --env development --allow-ip auto            # your current IP (e.g. after it changes)
+node infra/setup.mjs --env development --allow-ip 1.2.3.4,5.6.7.0/24
+node infra/setup.mjs --env development --new-password             # prints a new password once
+```
+
+**One-time dev setup:**
+1. `node infra/setup.mjs --env development --github`: creates the dev buckets, CloudFront site and deploy role,
+   allows your current IP, prints the dev site password, and fills in the `development` GitHub environment
+   (variables, branch rule, API token). Re-run the production setup with `--github` once too, so the
+   `production` environment only accepts deploys from `main`.
+2. Create the dev database on the existing Aurora cluster (as the master user):
+   `CREATE ROLE dfwlp_dev LOGIN PASSWORD '…'; GRANT dfwlp_dev TO dbadmin; CREATE DATABASE dfwlawnpros_dev OWNER dfwlp_dev;`
+   then set the `development` secret `DATABASE_URL` to
+   `postgresql://dfwlp_dev:…@<writer endpoint>:5432/dfwlawnpros_dev?sslmode=require`.
+3. Non-production keys, all optional: `ADMIN_EMAIL` (dev has its own Cognito users), Stripe **test** keys
+   (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`), and a separate Claude Platform on AWS **dev workspace** (its
+   ID in `infra/config.development.json`, then re-run step 1). Leave the ad-tracking IDs unset in dev.
+
+## Custom domains
+
+| Environment | Main address | Also answers (redirects to the main address) |
+| --- | --- | --- |
+| production | `https://dfwlawnpros.com` | `www.dfwlawnpros.com`, the `…cloudfront.net` address |
+| development | `https://dev.dfwlawnpros.com` | the `…cloudfront.net` address |
+
+Set in `domain` in `infra/config.json` / `config.development.json` (`names`, first = main address, at most two;
+`hostedZone` = the Route 53 zone). Running setup for an environment:
+- reuses or requests one certificate for `dfwlawnpros.com` and `*.dfwlawnpros.com` in us-east-1 (shared by both
+  environments), adds its DNS validation record and waits until it's issued;
+- attaches the names to that environment's CloudFront site and creates their Route 53 records (A, plus AAAA for
+  public sites);
+- with `--github`, sets `SITE_URL` to the main address. The next Backend deploy then uses it for API CORS, the map
+  key's allowed sites, Stripe redirects and admin invitation links.
+
+To switch without downtime, first add the new address to the API's allowed origins (the `ALLOWED_ORIGINS`
+variable, e.g. `https://dfwlawnpros.com,https://<old>.cloudfront.net`) and redeploy the backend, then run setup.
 
 ## Ad landing page, maps and tracking
 

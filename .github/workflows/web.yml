@@ -1,9 +1,10 @@
-# Checks the site on every pull request; on main, builds it against the deployed API and publishes to CloudFront.
+# Checks the site on every pull request; on main (production) or develop (dev), builds it against that
+# environment's API and publishes to its CloudFront site.
 name: Web
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths: ['web/**', 'shared/**', '.github/workflows/web.yml']
   pull_request:
     paths: ['web/**', 'shared/**', '.github/workflows/web.yml']
@@ -36,9 +37,11 @@ jobs:
 
   deploy:
     needs: check
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    # main deploys to production, develop to the private dev environment (each GitHub environment has its
+    # own AWS role, stacks, keys and secrets, and only accepts deploys from its own branch).
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
     permissions:
       contents: read
       id-token: write
@@ -79,6 +82,8 @@ jobs:
         env:
           VITE_PUBLIC_PHONE: ${{ vars.VITE_PUBLIC_PHONE }}
           VITE_PUBLIC_EMAIL: ${{ vars.VITE_PUBLIC_EMAIL }}
+          # Dev only: sent to the dev API on every request (the dev site itself is IP/password-gated).
+          VITE_API_ACCESS_TOKEN: ${{ secrets.API_ACCESS_TOKEN }}
           # Ad-platform tracking; each script loads only when its ID is set.
           VITE_GA4_ID: ${{ vars.VITE_GA4_ID }}
           VITE_META_PIXEL_ID: ${{ vars.VITE_META_PIXEL_ID }}

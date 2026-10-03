@@ -1,10 +1,10 @@
 import { getIdToken } from '@/auth/auth'
-import { API_BASE_URL } from '@/config/env'
+import { API_BASE_URL, apiAccessHeaders } from '@/config/env'
 import type { LeadFilters } from '@/lib/types'
 import { ApiError, type Api } from './types'
 
 async function request<T>(method: string, path: string, body?: unknown, auth = true): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...apiAccessHeaders() }
   if (auth) {
     const token = await getIdToken()
     if (token) headers.Authorization = `Bearer ${token}`
