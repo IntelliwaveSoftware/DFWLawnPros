@@ -13,7 +13,11 @@
     "artifacts": "dfwlawnpros.backend.com"
   },
   "domain": {
-    "names": [],
+    "names": [
+      "dfwlawnpros.com",
+      "www.dfwlawnpros.com"
+    ],
+    "hostedZone": "dfwlawnpros.com",
     "certificateArn": ""
   }
 }

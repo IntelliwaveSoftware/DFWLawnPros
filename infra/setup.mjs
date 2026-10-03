@@ -15,6 +15,12 @@
 //   --new-api-token                         with --github: replace the dev API access token secret
 // Private environments' IPs, password hash and API token are never written to this repo (it's public).
 //
+// Custom domain: "domain": { "names": ["dfwlawnpros.com", "www.dfwlawnpros.com"], "hostedZone": "dfwlawnpros.com" }
+// (first name = the site's main address, at most two). Setup finds the Route 53 zone, reuses or requests a
+// certificate for the zone and *.zone in us-east-1 (CloudFront's region; one certificate serves every
+// environment), adds its DNS validation record and waits for it to be issued. The stack then attaches the
+// names to CloudFront and creates their DNS records.
+//
 // Buckets named in config.json are reused when they already exist in this account and region, and
 // created by the stack when they don't. An empty name lets CloudFormation generate one.
 // With anthropicWorkspaceId set, it also turns on the account's outbound web identity federation,
@@ -167,6 +173,60 @@ function federationEnabled() {
   throw new SetupError(`Could not check outbound web identity federation: ${res.error}`)
 }
 
+// ---------------------------------------------------------------- custom domain
+
+/** ACM certificates for CloudFront must live in us-east-1, whatever region the rest uses. */
+function acm(...args) {
+  try {
+    const out = run('aws', ['acm', ...args, '--region', 'us-east-1', '--output', 'json'])
+    return out.trim() ? JSON.parse(out) : {}
+  } catch (e) {
+    throw new SetupError(`aws acm ${args[0]} failed: ${String(e.stderr || e.message).trim()}`)
+  }
+}
+
+function findHostedZone(zone) {
+  const res = aws('route53', 'list-hosted-zones-by-name', '--dns-name', zone, '--max-items', '1')
+  if (res.error) throw new SetupError(`Could not read Route 53 hosted zones: ${res.error}`)
+  const hz = res.HostedZones?.[0]
+  if (!hz || hz.Name !== `${zone}.` || hz.Config?.PrivateZone) throw new SetupError(`No public Route 53 hosted zone named ${zone}`)
+  return hz.Id.replace('/hostedzone/', '')
+}
+
+/** An issued (or pending) certificate for zone + *.zone, if one exists. */
+function findCertificate(zone) {
+  const list = acm('list-certificates', '--certificate-statuses', 'ISSUED', 'PENDING_VALIDATION').CertificateSummaryList ?? []
+  for (const c of list.filter((c) => c.DomainName === zone)) {
+    const cert = acm('describe-certificate', '--certificate-arn', c.CertificateArn).Certificate
+    if (cert.SubjectAlternativeNames?.includes(`*.${zone}`)) return { arn: cert.CertificateArn, status: cert.Status }
+  }
+  return null
+}
+
+/** Requests the certificate if needed, adds its DNS validation record, and waits until it's issued. */
+function ensureCertificate(zone, zoneId, found) {
+  let arn = found?.arn
+  if (!arn) {
+    arn = acm('request-certificate', '--domain-name', zone, '--subject-alternative-names', `*.${zone}`, '--validation-method', 'DNS',
+      '--idempotency-token', zone.replace(/[^a-z0-9]/gi, '').slice(0, 32)).CertificateArn
+    console.log(`Requested certificate for ${zone} and *.${zone}`)
+  }
+  if (found?.status === 'ISSUED') return arn
+  // The validation record (the same one for zone and *.zone) can take a few seconds to appear.
+  let record
+  for (let i = 0; i < 20 && !record; i++) {
+    record = acm('describe-certificate', '--certificate-arn', arn).Certificate.DomainValidationOptions?.find((o) => o.ResourceRecord)?.ResourceRecord
+    if (!record) execFileSync('sleep', ['3'])
+  }
+  if (!record) throw new SetupError('ACM did not provide a DNS validation record; re-run setup in a minute')
+  const change = { Changes: [{ Action: 'UPSERT', ResourceRecordSet: { Name: record.Name, Type: record.Type, TTL: 300, ResourceRecords: [{ Value: record.Value }] } }] }
+  const res = aws('route53', 'change-resource-record-sets', '--hosted-zone-id', zoneId, '--change-batch', JSON.stringify(change))
+  if (res.error) throw new SetupError(`Could not add the certificate validation record: ${res.error}`)
+  console.log('Added the certificate validation record; waiting for the certificate to be issued (usually a few minutes)…')
+  runOrFail('Waiting for certificate validation', 'aws', ['acm', 'wait', 'certificate-validated', '--certificate-arn', arn, '--region', 'us-east-1'], { quiet: false })
+  return arn
+}
+
 /** This computer's public IPv4 address, for `--allow-ip auto`. */
 async function publicIp() {
   const ip = (await (await fetch('https://checkip.amazonaws.com')).text()).trim()
@@ -262,6 +322,22 @@ async function main() {
   const federation = anthropicWorkspaceId ? federationEnabled() : null
   const subjectPrefix = githubSubjectPrefix()
 
+  // Custom domain: hosted zone + certificate (looked up now, requested/validated after the dry-run check).
+  const names = domain.names ?? []
+  let dns = null
+  if (names.length) {
+    if (names.length > 2) throw new SetupError('domain.names supports at most two names (e.g. the domain and its www.)')
+    if (domain.certificateArn) {
+      dns = { certificateArn: domain.certificateArn, zoneId: domain.hostedZone ? findHostedZone(domain.hostedZone) : '' }
+    } else {
+      const zone = domain.hostedZone
+      if (!zone) throw new SetupError('domain.hostedZone is required when domain.names is set (or give a certificateArn)')
+      const outside = names.filter((n) => n !== zone && !n.endsWith(`.${zone}`))
+      if (outside.length) throw new SetupError(`${outside.join(', ')} is not in the ${zone} zone`)
+      dns = { zone, zoneId: findHostedZone(zone), cert: findCertificate(zone) }
+    }
+  }
+
   // Private environment gate. Values not passed keep their current setting (CloudFormation reuses a
   // parameter's previous value when it isn't supplied), so the password never needs to be readable.
   const gate = {}
@@ -283,10 +359,16 @@ async function main() {
   if (access.restricted) {
     console.log(`  Site access           private: ${gate.AllowedIps !== undefined ? `IPs ${gate.AllowedIps}` : 'IP list unchanged'}, ${newPassword ? 'new password' : 'password unchanged'}`)
   }
+  if (dns) {
+    const certNote = dns.certificateArn ? 'given in config' : dns.cert ? `${dns.cert.status.toLowerCase().replace('_', ' ')}, reused` : 'will be requested'
+    console.log(`  Custom domain         ${names.join(', ')} → https://${names[0]} (certificate ${certNote}${dns.zoneId ? `, DNS in zone ${dns.zone ?? domain.hostedZone}` : ''})`)
+  }
   if (!anthropicWorkspaceId) console.log(`  AI enrichment         off (no anthropicWorkspaceId in ${configFile})`)
   else console.log(`  AI enrichment         workspace ${anthropicWorkspaceId}; outbound identity federation ${federation ? 'already on' : 'will be turned on'}`)
   console.log('')
   if (DRY_RUN) return
+
+  const certificateArn = dns ? (dns.certificateArn ?? ensureCertificate(dns.zone, dns.zoneId, dns.cert)) : ''
 
   if (federation === false) {
     runOrFail('Enabling outbound web identity federation', 'aws', ['iam', 'enable-outbound-web-identity-federation', '--region', region])
@@ -304,8 +386,9 @@ async function main() {
     ManageSiteBucketPolicy: String(manageSitePolicy),
     ArtifactsBucketName: artifacts.name,
     CreateArtifactsBucket: String(artifacts.create),
-    DomainNames: (domain.names ?? []).join(','),
-    CertificateArn: domain.certificateArn ?? '',
+    DomainNames: names.join(','),
+    CertificateArn: certificateArn,
+    HostedZoneId: dns?.zoneId ?? '',
     ...gate,
   }
   runOrFail(

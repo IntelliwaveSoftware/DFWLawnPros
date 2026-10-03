@@ -13,7 +13,10 @@
     "artifacts": "dfwlawnpros-dev-artifacts"
   },
   "domain": {
-    "names": [],
+    "names": [
+      "dev.dfwlawnpros.com"
+    ],
+    "hostedZone": "dfwlawnpros.com",
     "certificateArn": ""
   },
   "access": {

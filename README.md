@@ -143,7 +143,7 @@ GitHub gets short-lived AWS credentials through OIDC; no AWS keys are stored in 
 **One-time setup**
 
 1. Edit [infra/config.json](infra/config.json): AWS region, stack names, GitHub repo, and optionally a custom
-   domain (`domain.names` plus an ACM `certificateArn` in us-east-1). Under `buckets`:
+   domain (see **Custom domains** below). Under `buckets`:
 
    | `buckets.site` / `buckets.artifacts` | What setup does |
    | --- | --- |
@@ -241,6 +241,25 @@ node infra/setup.mjs --env development --new-password             # prints a new
 3. Non-production keys, all optional: `ADMIN_EMAIL` (dev has its own Cognito users), Stripe **test** keys
    (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`), and a separate Claude Platform on AWS **dev workspace** (its
    ID in `infra/config.development.json`, then re-run step 1). Leave the ad-tracking IDs unset in dev.
+
+## Custom domains
+
+| Environment | Main address | Also answers (redirects to the main address) |
+| --- | --- | --- |
+| production | `https://dfwlawnpros.com` | `www.dfwlawnpros.com`, the `…cloudfront.net` address |
+| development | `https://dev.dfwlawnpros.com` | the `…cloudfront.net` address |
+
+Set in `domain` in `infra/config.json` / `config.development.json` (`names`, first = main address, at most two;
+`hostedZone` = the Route 53 zone). Running setup for an environment:
+- reuses or requests one certificate for `dfwlawnpros.com` and `*.dfwlawnpros.com` in us-east-1 (shared by both
+  environments), adds its DNS validation record and waits until it's issued;
+- attaches the names to that environment's CloudFront site and creates their Route 53 records (A, plus AAAA for
+  public sites);
+- with `--github`, sets `SITE_URL` to the main address. The next Backend deploy then uses it for API CORS, the map
+  key's allowed sites, Stripe redirects and admin invitation links.
+
+To switch without downtime, first add the new address to the API's allowed origins (the `ALLOWED_ORIGINS`
+variable, e.g. `https://dfwlawnpros.com,https://<old>.cloudfront.net`) and redeploy the backend, then run setup.
 
 ## Ad landing page, maps and tracking
 
