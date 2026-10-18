@@ -4,7 +4,7 @@
 // Waits for an interaction (tap, click, key press, wheel) rather than firing on page load, so crawlers
 // that run JavaScript don't wake the database. Scroll isn't used: the router scrolls programmatically.
 // At most one ping per 5 minutes, shared across tabs; continued activity keeps pinging at that pace.
-import { API_BASE_URL, USE_MOCK_API } from '@/config/env'
+import { API_BASE_URL, USE_MOCK_API, apiAccessHeaders } from '@/config/env'
 
 const INTERVAL_MS = 5 * 60_000
 const STORAGE_KEY = 'dfwlp:warmup'
@@ -32,7 +32,7 @@ function ping() {
   } catch {
     // Fall back to this tab's in-memory timestamp.
   }
-  fetch(`${API_BASE_URL}/warmup`, { cache: 'no-store' }).catch(() => {})
+  fetch(`${API_BASE_URL}/warmup`, { cache: 'no-store', headers: apiAccessHeaders() }).catch(() => {})
 }
 
 export function startWarmup() {

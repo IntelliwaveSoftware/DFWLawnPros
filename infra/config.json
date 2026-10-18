@@ -5,14 +5,19 @@
   "anthropicWorkspaceId": "wrkspc_01CcxyxiRUVpnTWrLusTBTDX",
   "github": {
     "repo": "IntelliwaveSoftware/DFWLawnPros",
-    "environment": "production"
+    "environment": "production",
+    "branch": "main"
   },
   "buckets": {
     "site": "dfwlawnpros.com",
     "artifacts": "dfwlawnpros.backend.com"
   },
   "domain": {
-    "names": [],
+    "names": [
+      "dfwlawnpros.com",
+      "www.dfwlawnpros.com"
+    ],
+    "hostedZone": "dfwlawnpros.com",
     "certificateArn": ""
   }
 }

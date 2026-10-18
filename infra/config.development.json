@@ -1,0 +1,26 @@
+{
+  "region": "us-east-1",
+  "stackName": "dfwlawnpros-dev-bootstrap",
+  "apiStackName": "dfwlawnpros-dev-api",
+  "anthropicWorkspaceId": "",
+  "github": {
+    "repo": "IntelliwaveSoftware/DFWLawnPros",
+    "environment": "development",
+    "branch": "develop"
+  },
+  "buckets": {
+    "site": "dfwlawnpros-dev-site",
+    "artifacts": "dfwlawnpros-dev-artifacts"
+  },
+  "domain": {
+    "names": [
+      "dev.dfwlawnpros.com"
+    ],
+    "hostedZone": "dfwlawnpros.com",
+    "certificateArn": ""
+  },
+  "access": {
+    "restricted": true,
+    "username": "dfwlp"
+  }
+}

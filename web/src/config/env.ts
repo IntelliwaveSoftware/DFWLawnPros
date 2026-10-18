@@ -5,6 +5,13 @@ export const API_BASE_URL = (env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 export const USE_MOCK_API = !API_BASE_URL
 
 /**
+ * Non-public environments only (the dev site): sent as X-Dev-Access on every API request. The dev build is
+ * only served to visitors who pass the dev site's IP/password gate, which is what keeps it private.
+ */
+export const API_ACCESS_TOKEN = env.VITE_API_ACCESS_TOKEN ?? ''
+export const apiAccessHeaders = (): Record<string, string> => (API_ACCESS_TOKEN ? { 'X-Dev-Access': API_ACCESS_TOKEN } : {})
+
+/**
  * How staff sign in when a real API is configured.
  *  - 'cognito' (default): Amazon Cognito.
  *  - 'local': password-less sign-in that issues unsigned tokens accepted only by the local dev server
@@ -23,7 +30,7 @@ if (env.VITE_AUTH_MODE === 'local' && !env.DEV) {
 export const COGNITO_REGION = env.VITE_COGNITO_REGION ?? 'us-east-1'
 export const COGNITO_CLIENT_ID = env.VITE_COGNITO_CLIENT_ID ?? ''
 
-export const PUBLIC_PHONE = env.VITE_PUBLIC_PHONE || '(214) 555-0142'
+export const PUBLIC_PHONE = env.VITE_PUBLIC_PHONE || '(214) 997-9733'
 export const PUBLIC_EMAIL = env.VITE_PUBLIC_EMAIL || 'hello@dfwlawnpros.com'
 export const PHONE_HREF = `tel:+1${PUBLIC_PHONE.replace(/\D/g, '')}`
 
