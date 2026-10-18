@@ -30,7 +30,7 @@ if (env.VITE_AUTH_MODE === 'local' && !env.DEV) {
 export const COGNITO_REGION = env.VITE_COGNITO_REGION ?? 'us-east-1'
 export const COGNITO_CLIENT_ID = env.VITE_COGNITO_CLIENT_ID ?? ''
 
-export const PUBLIC_PHONE = env.VITE_PUBLIC_PHONE || '(214) 555-0142'
+export const PUBLIC_PHONE = env.VITE_PUBLIC_PHONE || '(214) 997-9733'
 export const PUBLIC_EMAIL = env.VITE_PUBLIC_EMAIL || 'hello@dfwlawnpros.com'
 export const PHONE_HREF = `tel:+1${PUBLIC_PHONE.replace(/\D/g, '')}`
 
