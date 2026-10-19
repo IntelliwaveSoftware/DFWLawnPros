@@ -21,6 +21,7 @@ import { TIMEFRAMES } from '@/lib/catalog'
 import { consentText, displayConsent, hasPhoneNumber } from '@/lib/consent'
 import { moneyRange, num } from '@/lib/format'
 import type { GeoResult } from '@/lib/geocode'
+import { useSeo } from '@/lib/seo'
 import { LAWN_SIZE_PRESETS, PRICING_ITEMS, buildQuote, priceLine, primaryServiceFor } from '@/lib/pricing'
 import { setTrackingContext, track } from '@/lib/track'
 import { useIsPhone } from '@/lib/useMediaQuery'
@@ -65,6 +66,17 @@ export interface InstantQuoteProps {
   addressRequest?: { address: GeoResult; id: number } | null
   /** Quote items to pre-select, e.g. `{ artificial_turf: '' }` for a turf ad. */
   initialItems?: Record<string, string>
+}
+
+/** The standalone /instant-quote page (the quote is also embedded in the ad landing page). */
+export function InstantQuotePage() {
+  useSeo({
+    title: 'Instant Lawn Care Quote in Dallas–Fort Worth',
+    description:
+      'Enter your address, outline your lawn on the satellite map and see your lawn care price instantly. Local DFW pros, no phone tag.',
+    image: img.lawnCloseup,
+  })
+  return <InstantQuote />
 }
 
 export function InstantQuote({ embedded = false, addressRequest, initialItems }: InstantQuoteProps = {}) {

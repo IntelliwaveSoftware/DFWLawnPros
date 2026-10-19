@@ -3,9 +3,15 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { confirmSignUp, signIn, signUp } from '@/auth/auth'
 import { Logo } from '@/components/Logo'
+import { useSeo } from '@/lib/seo'
 
 export function ContractorSignup() {
   const navigate = useNavigate()
+  useSeo({
+    title: 'Get Lawn Care & Landscaping Leads in Dallas–Fort Worth',
+    description:
+      'Grow your landscaping business with exclusive local leads. Apply to join the DFW Lawn Pros network of lawn care and landscaping companies.',
+  })
   const [form, setForm] = useState({ name: '', email: '', password: '' })
   const [code, setCode] = useState('')
   const [needsCode, setNeedsCode] = useState(false)

@@ -17,7 +17,7 @@ export const router = createBrowserRouter([
       { path: '/', element: <Home /> },
       { path: '/portfolio', element: <Portfolio /> },
       { path: '/portfolio/:slug', element: <PortfolioProject /> },
-      { path: '/instant-quote', lazy: async () => ({ Component: (await import('@/pages/public/InstantQuote')).InstantQuote }) },
+      { path: '/instant-quote', lazy: async () => ({ Component: (await import('@/pages/public/InstantQuote')).InstantQuotePage }) },
       { path: '/get-quote', element: <GetQuote /> },
       { path: '/thank-you', element: <ThankYou /> },
       { path: '/privacy', element: <Privacy /> },

@@ -5,11 +5,13 @@ import { completeNewPassword, NewPasswordRequiredError, signIn } from '@/auth/au
 import type { Session } from '@/auth/session'
 import { Logo } from '@/components/Logo'
 import { AUTH_MODE } from '@/config/env'
+import { useSeo } from '@/lib/seo'
 import { DEMO_ADMIN, DEMO_CONTRACTOR } from '@/api/mock/seed'
 
 export function Login() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
+  useSeo({ title: 'Sign in', noindex: true })
   const role = params.get('role') === 'admin' ? 'admin' : 'contractor'
   const demo = role === 'admin' ? DEMO_ADMIN : DEMO_CONTRACTOR
   const localEmail = role === 'admin' ? 'admin@local.test' : 'contractor@local.test'

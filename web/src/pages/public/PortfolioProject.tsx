@@ -2,18 +2,31 @@ import { ArrowLeft, ArrowRight, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router'
 import { PORTFOLIO, getProject } from '@/content/portfolio'
+import type { PortfolioProject as Project } from '@/content/site'
+import { useSeo } from '@/lib/seo'
+
+// Temporary: one photo per project until real project photography arrives. Remove the limit
+// (or raise it) to show each project's full gallery again.
+const MAX_PHOTOS = 1
+const photosOf = (project: Project) => project.gallery.slice(0, MAX_PHOTOS)
 
 export function PortfolioProject() {
   const { slug = '' } = useParams()
   const project = getProject(slug)
   const [lightbox, setLightbox] = useState<number | null>(null)
+  useSeo({
+    title: project ? `${project.title}: ${project.services.join(', ')} in ${project.city}, TX` : 'Portfolio',
+    description: project?.summary,
+    image: project?.cover,
+  })
 
   useEffect(() => {
     if (lightbox === null || !project) return
+    const count = photosOf(project).length
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setLightbox(null)
-      if (e.key === 'ArrowRight') setLightbox((i) => ((i ?? 0) + 1) % project.gallery.length)
-      if (e.key === 'ArrowLeft') setLightbox((i) => ((i ?? 0) - 1 + project.gallery.length) % project.gallery.length)
+      if (e.key === 'ArrowRight') setLightbox((i) => ((i ?? 0) + 1) % count)
+      if (e.key === 'ArrowLeft') setLightbox((i) => ((i ?? 0) - 1 + count) % count)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -21,6 +34,7 @@ export function PortfolioProject() {
 
   if (!project) return <Navigate to="/portfolio" replace />
 
+  const photos = photosOf(project)
   const idx = PORTFOLIO.indexOf(project)
   const prev = PORTFOLIO[(idx - 1 + PORTFOLIO.length) % PORTFOLIO.length]
   const next = PORTFOLIO[(idx + 1) % PORTFOLIO.length]
@@ -49,7 +63,7 @@ export function PortfolioProject() {
         </div>
 
         <div className="mt-12 grid gap-6 md:grid-cols-2">
-          {project.gallery.map((src, i) => (
+          {photos.map((src, i) => (
             <button
               key={src}
               onClick={() => setLightbox(i)}
@@ -94,7 +108,7 @@ export function PortfolioProject() {
             <X className="size-8" />
           </button>
           <img
-            src={project.gallery[lightbox].replace(/w=\d+/, 'w=2400')}
+            src={photos[lightbox].replace(/w=\d+/, 'w=2400')}
             alt={`${project.title} photo ${lightbox + 1}`}
             className="max-h-[90vh] max-w-full object-contain"
             onClick={(e) => e.stopPropagation()}

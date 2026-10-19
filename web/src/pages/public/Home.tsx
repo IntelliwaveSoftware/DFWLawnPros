@@ -4,11 +4,12 @@ import { AddressSearch } from '@/components/AddressSearch'
 import { BeforeAfter } from '@/components/BeforeAfter'
 import { LeadForm } from '@/components/LeadForm'
 import { SectionHeading } from '@/components/SectionHeading'
-import { PHONE_HREF, PUBLIC_EMAIL, PUBLIC_PHONE } from '@/config/env'
+import { PHONE_HREF, PUBLIC_EMAIL, PUBLIC_PHONE, SITE_URL } from '@/config/env'
 import { img } from '@/content/images'
 import { PORTFOLIO } from '@/content/portfolio'
 import {
   AUDIENCES,
+  BRAND,
   FAQS,
   HERO,
   PILLARS,
@@ -19,6 +20,7 @@ import {
   STATS,
 } from '@/content/site'
 import type { GeoResult } from '@/lib/geocode'
+import { useSeo } from '@/lib/seo'
 
 function Hero() {
   const navigate = useNavigate()
@@ -328,9 +330,27 @@ function StartProject() {
   )
 }
 
+// Structured data for search engines: who we are, how to reach us and where we work.
+const STRUCTURED_DATA = JSON.stringify([
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: BRAND.name,
+    url: `${SITE_URL}/`,
+    logo: `${SITE_URL}/favicon.svg`,
+    description: BRAND.tagline,
+    telephone: PHONE_HREF.replace('tel:', ''),
+    email: PUBLIC_EMAIL,
+    areaServed: SERVICE_AREA.cities.map((name) => ({ '@type': 'City', name: `${name}, TX` })),
+  },
+  { '@context': 'https://schema.org', '@type': 'WebSite', name: BRAND.name, url: `${SITE_URL}/` },
+]).replace(/</g, '\\u003c')
+
 export function Home() {
+  useSeo({ title: 'Lawn Care & Landscaping Quotes in Dallas–Fort Worth | DFW Lawn Pros' })
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: STRUCTURED_DATA }} />
       <Hero />
       <PortfolioPreview />
       <Services />
