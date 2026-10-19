@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router'
 import { ConsultationForm } from '@/components/ConsultationForm'
 import { img } from '@/content/images'
 import { getService } from '@/lib/catalog'
+import { useSeo } from '@/lib/seo'
 import { setTrackingContext } from '@/lib/track'
 import type { ServiceKey } from '@/lib/types'
 
@@ -11,6 +12,12 @@ export function GetQuote() {
   const service = getService(params.get('service') ?? '')?.key ?? ''
   // Set by the landscaping version of the ad landing page.
   const city = (params.get('city') ?? '').slice(0, 60)
+  useSeo({
+    title: 'Request a Landscaping Consultation in Dallas–Fort Worth',
+    description:
+      'Tell us about your landscaping project and we’ll match you with a trusted local company that serves your area — design, patios, sod, irrigation and more.',
+    image: img.design,
+  })
 
   useEffect(() => setTrackingContext({ page: 'lead_form', service: service || undefined, city: city || undefined }), [service, city])
 

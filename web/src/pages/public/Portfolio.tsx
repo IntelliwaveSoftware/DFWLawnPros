@@ -1,9 +1,15 @@
 import { Link } from 'react-router'
 import { PORTFOLIO } from '@/content/portfolio'
+import { useSeo } from '@/lib/seo'
 
 // Styled after bonicklandscaping.com/portfolio: grey page, dashed heading,
 // three-column grid of tall image tiles with the project name beneath.
 export function Portfolio() {
+  useSeo({
+    title: 'Landscaping Projects Across Dallas–Fort Worth',
+    description:
+      'Backyard renovations, pool surrounds, sod and front-yard makeovers completed by landscaping companies in the DFW Lawn Pros network.',
+  })
   return (
     <div className="bg-portfolio pt-18">
       <div className="container-x py-16 sm:py-20">

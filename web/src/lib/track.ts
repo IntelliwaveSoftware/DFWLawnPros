@@ -2,7 +2,7 @@
 // personal data) for the admin drop-off chart, and to GA4 / Meta / Google Ads when their IDs are set.
 import type { TrackedEvent, TrackedPage } from '@shared/funnel'
 import { api } from '@/api'
-import { GA4_ID, GOOGLE_ADS_CONVERSION_LABEL, GOOGLE_ADS_ID, META_PIXEL_ID } from '@/config/env'
+import { GA4_ID, GOOGLE_ADS_CONVERSION_LABEL, GOOGLE_ADS_ID, IS_PRERENDER, META_PIXEL_ID } from '@/config/env'
 import { getUtm } from './utm'
 
 type Gtag = (...args: unknown[]) => void
@@ -45,6 +45,7 @@ let memorySession: string | undefined
 const CONVERSIONS: TrackedEvent[] = ['quote_submitted', 'lead_form_submitted', 'callback_submitted']
 
 export function track(event: TrackedEvent) {
+  if (IS_PRERENDER) return
   const params = { page: context.page, service: context.service, city: context.city }
   window.dataLayer?.push({ event, ...params })
   window.gtag?.('event', event, params)
@@ -69,6 +70,8 @@ function loadScript(src: string) {
 
 /** Loads the ad-platform scripts whose IDs are configured. Call once at startup. */
 export function initAnalytics() {
+  // Build-time snapshots must not bake ad scripts into the static HTML (they'd load twice).
+  if (IS_PRERENDER) return
   const googleId = GA4_ID || GOOGLE_ADS_ID
   if (googleId) {
     window.dataLayer = window.dataLayer ?? []

@@ -2,10 +2,12 @@ import { CheckCircle2 } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { PHONE_HREF, PUBLIC_EMAIL, PUBLIC_PHONE } from '@/config/env'
 import { BRAND } from '@/content/site'
+import { useSeo } from '@/lib/seo'
 
 export function ThankYou() {
   const [params] = useSearchParams()
   const ref = params.get('ref')
+  useSeo({ title: 'Request received', noindex: true })
   return (
     <div className="container-x flex min-h-[70vh] flex-col items-center justify-center pt-28 pb-20 text-center">
       <CheckCircle2 className="size-16 text-leaf" />
@@ -26,6 +28,7 @@ export function ThankYou() {
 }
 
 export function Privacy() {
+  useSeo({ title: 'Privacy Policy', description: `How ${BRAND.name} collects, uses and shares the information you provide.` })
   return (
     <div className="container-x max-w-3xl pt-32 pb-20">
       <h1 className="text-4xl text-forest-900">Privacy Policy</h1>
@@ -56,6 +59,7 @@ export function Privacy() {
 }
 
 export function NotFound() {
+  useSeo({ title: 'Page not found', noindex: true })
   return (
     <div className="container-x flex min-h-[70vh] flex-col items-center justify-center pt-28 pb-20 text-center">
       <p className="eyebrow">404</p>

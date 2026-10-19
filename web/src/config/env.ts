@@ -30,6 +30,15 @@ if (env.VITE_AUTH_MODE === 'local' && !env.DEV) {
 export const COGNITO_REGION = env.VITE_COGNITO_REGION ?? 'us-east-1'
 export const COGNITO_CLIENT_ID = env.VITE_COGNITO_CLIENT_ID ?? ''
 
+/** The public site's address, for canonical links and sitemaps (set per environment at build time). */
+export const SITE_URL = (env.VITE_SITE_URL || 'https://dfwlawnpros.com').replace(/\/$/, '')
+
+/**
+ * True while the build's prerender step is rendering pages into static HTML (scripts/prerender.mjs sets
+ * the flag). Tracking and anything else that shouldn't run for a build-time snapshot checks this.
+ */
+export const IS_PRERENDER = typeof window !== 'undefined' && '__PRERENDER__' in window
+
 export const PUBLIC_PHONE = env.VITE_PUBLIC_PHONE || '(214) 997-9733'
 export const PUBLIC_EMAIL = env.VITE_PUBLIC_EMAIL || 'hello@dfwlawnpros.com'
 export const PHONE_HREF = `tel:+1${PUBLIC_PHONE.replace(/\D/g, '')}`

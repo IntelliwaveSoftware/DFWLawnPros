@@ -1,5 +1,11 @@
-// Stock photography from Unsplash (free license). Replace with real project photos before launch.
+// Site photography: Unsplash and Pexels (free licenses) plus our own files in src/assets/Images. Replace stock photos with real project photos before launch.
+import dfwNeighborhood from '@/assets/Images/dfw-neighborhood-1200.webp'
+import artificialTurf from '@/assets/Images/artificial-turf.jpeg'
+import shrubTrimming from '@/assets/Images/shrub_trimming-1200.webp'
+
 const u = (id: string, w = 1600) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=75`
+// Pexels (free license): https://www.pexels.com/photo/<slug>-<id>/
+const pexels = (id: number, w = 1200) => `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=${w}`
 
 export const img = {
   hero: u('1600585154340-be6161a56a0c', 2200),
@@ -7,15 +13,15 @@ export const img = {
   lawnCloseup: u('1558904541-efa843a96f01', 1600),
   landscaping: u('1729552867938-05ecfcb3cce6', 1200),
   design: u('1600047509807-ba8f99d2cdde', 1200),
-  sod: u('1592595896551-12b371d546d5', 1200),
-  turf: u('1580587771525-78b9dba3b914', 1200),
-  irrigation: u('1598902108854-10e335adac99', 1200),
-  trees: u('1585938389612-a552a28d6914', 1200),
+  sod: pexels(5231236),
+  turf: artificialTurf,
+  irrigation: pexels(32974053),
+  trees: shrubTrimming,
   hardscape: u('1617850687395-620757feb1f3', 1200),
   planting: u('1622383563227-04401ab4e5ea', 1200),
   soil: u('1611843467160-25afb8df1074', 1200),
   residential: u('1598228723793-52759bba239c', 1400),
-  commercial: u('1600563438938-a9a27216b4f5', 1400),
+  commercial: dfwNeighborhood,
   frontYard: u('1625602812206-5ec545ca1231', 1600),
 }
 

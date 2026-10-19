@@ -34,6 +34,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+      # Renders the public pages to static HTML in headless Chrome (preinstalled on GitHub's Ubuntu runners).
+      - run: npm run prerender
 
   deploy:
     needs: check
@@ -89,17 +91,26 @@ jobs:
           VITE_META_PIXEL_ID: ${{ vars.VITE_META_PIXEL_ID }}
           VITE_GOOGLE_ADS_ID: ${{ vars.VITE_GOOGLE_ADS_ID }}
           VITE_GOOGLE_ADS_CONVERSION_LABEL: ${{ vars.VITE_GOOGLE_ADS_CONVERSION_LABEL }}
+          VITE_SITE_URL: ${{ vars.SITE_URL }}
 
-      # Hashed assets first (cached forever), index.html last (never cached), so visitors never get an
-      # index.html pointing at files that aren't uploaded yet. Old assets are kept, not deleted, so
-      # open tabs can still lazy-load the route chunks they were built with.
+      - name: Prerender public pages
+        run: npm run prerender
+        env:
+          VITE_SITE_URL: ${{ vars.SITE_URL }}
+          # Only production is open to search engines; other sites get a robots.txt that blocks crawling.
+          SEO_INDEXABLE: ${{ github.ref_name == 'main' }}
+
+      # Hashed assets first (cached forever), HTML pages last (never cached), so visitors never get a page
+      # pointing at files that aren't uploaded yet. Old assets are kept, not deleted, so open tabs can
+      # still lazy-load the route chunks they were built with. HTML for pages that no longer exist is
+      # deleted, so removed pages return 404.
       - name: Upload to S3
         env:
           BUCKET: ${{ vars.SITE_BUCKET }}
         run: |
           aws s3 sync dist/assets "s3://$BUCKET/assets" --cache-control "public,max-age=31536000,immutable"
-          aws s3 sync dist "s3://$BUCKET" --exclude "assets/*" --exclude "index.html" --cache-control "public,max-age=3600"
-          aws s3 cp dist/index.html "s3://$BUCKET/index.html" --cache-control "no-cache"
+          aws s3 sync dist "s3://$BUCKET" --exclude "assets/*" --exclude "*.html" --cache-control "public,max-age=3600"
+          aws s3 sync dist "s3://$BUCKET" --exclude "*" --include "*.html" --exclude "assets/*" --cache-control "no-cache" --delete
 
       - name: Invalidate CloudFront cache
         run: |

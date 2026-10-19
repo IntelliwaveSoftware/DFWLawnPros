@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '@/auth/AuthContext'
 import { Logo } from '@/components/Logo'
 import { API_BASE_URL, AUTH_MODE } from '@/config/env'
+import { useSeo } from '@/lib/seo'
 
 export interface NavItem {
   to: string
@@ -17,6 +18,7 @@ export function DashboardLayout({ title, nav }: { title: string; nav: NavItem[] 
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
+  useSeo({ title, noindex: true })
   useEffect(() => setOpen(false), [pathname])
 
   const sidebar = (

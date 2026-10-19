@@ -17,22 +17,11 @@ import { consentText, displayConsent } from '@/lib/consent'
 import { moneyRange, num } from '@/lib/format'
 import type { GeoResult } from '@/lib/geocode'
 import { PRICING_ITEMS, priceLine } from '@/lib/pricing'
+import { useSeo } from '@/lib/seo'
 import { setTrackingContext, track } from '@/lib/track'
 import type { ServiceKey } from '@/lib/types'
 import { getUtm } from '@/lib/utm'
 import { InstantQuote } from './InstantQuote'
-
-function useNoIndex(title: string) {
-  useEffect(() => {
-    document.title = `${title} | DFW Lawn Pros`
-    // Paid-traffic pages shouldn't compete with the main site in search results.
-    const meta = document.createElement('meta')
-    meta.name = 'robots'
-    meta.content = 'noindex'
-    document.head.appendChild(meta)
-    return () => meta.remove()
-  }, [title])
-}
 
 function CallButton({ dark = false }: { dark?: boolean }) {
   return (
@@ -172,7 +161,8 @@ export function LawnQuoteLanding() {
   // An address typed in the banner is handed to the quote section (a new id each time).
   const [addressRequest, setAddressRequest] = useState<{ address: GeoResult; id: number } | null>(null)
 
-  useNoIndex(title)
+  // Paid-traffic page: kept out of search results so it doesn't compete with the main site.
+  useSeo({ title, noindex: true })
   useEffect(() => {
     setTrackingContext({ page: 'landing', service, city })
     track('page_view')
