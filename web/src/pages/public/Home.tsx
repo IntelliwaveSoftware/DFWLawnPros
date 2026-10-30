@@ -171,13 +171,7 @@ function Renovations() {
             </Link>
           </div>
         </SectionHeading>
-        {/* Demo imagery: replace `before` with a real before photo and remove beforeStyle. */}
-        <BeforeAfter
-          before={img.frontYard}
-          after={img.frontYard}
-          beforeStyle={{ filter: 'saturate(0.25) sepia(0.55) brightness(0.9) contrast(0.95)' }}
-          alt="Front lawn renovation"
-        />
+        <BeforeAfter before={img.yardBefore} after={img.yardAfter} alt="Yard renovation" />
       </div>
     </section>
   )

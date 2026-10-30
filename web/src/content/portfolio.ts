@@ -1,6 +1,6 @@
 // Portfolio of completed projects by partner companies. Stock photos are PLACEHOLDERS —
 // replace with real project photography (and partner permission) before launch.
-import { unsplash as u } from './images'
+import { img, unsplash as u } from './images'
 import type { PortfolioProject } from './site'
 
 export const PORTFOLIO: PortfolioProject[] = [
@@ -14,13 +14,13 @@ export const PORTFOLIO: PortfolioProject[] = [
     gallery: [u('1600585154340-be6161a56a0c'), u('1558904541-efa843a96f01'), u('1585320806297-9794b3e4eeae')],
   },
   {
-    slug: 'starwood',
-    title: 'Starwood',
-    city: 'Frisco',
-    services: ['Modern landscape', 'Artificial turf'],
-    summary: 'Clean-lined modern landscape with synthetic turf, ornamental grasses and a floating concrete step path.',
-    cover: u('1580587771525-78b9dba3b914', 1200),
-    gallery: [u('1580587771525-78b9dba3b914'), u('1512917774080-9991f1c4c750'), u('1600047509807-ba8f99d2cdde')],
+    slug: 'fort-worth',
+    title: 'Fort Worth',
+    city: 'Fort Worth',
+    services: ['Sod', 'Trees & Shrubs'],
+    summary: 'A tired yard brought back to life with fresh sod and reshaped trees and shrubs.',
+    cover: img.yardAfter,
+    gallery: [img.yardAfter, img.yardBefore],
   },
   {
     slug: 'tanglewood-court',

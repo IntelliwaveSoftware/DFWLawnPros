@@ -1,4 +1,6 @@
 // Site photography: Unsplash and Pexels (free licenses) plus our own files in src/assets/Images. Replace stock photos with real project photos before launch.
+import yardAfter from '@/assets/Images/after-1600.webp'
+import yardBefore from '@/assets/Images/before-1600.webp'
 import dfwNeighborhood from '@/assets/Images/dfw-neighborhood-1200.webp'
 import artificialTurf from '@/assets/Images/artificial-turf.jpeg'
 import shrubTrimming from '@/assets/Images/shrub_trimming-1200.webp'
@@ -23,6 +25,9 @@ export const img = {
   residential: u('1598228723793-52759bba239c', 1400),
   commercial: dfwNeighborhood,
   frontYard: u('1625602812206-5ec545ca1231', 1600),
+  // A real before/after pair (same framing), used by the home page slider and the Fort Worth project.
+  yardBefore,
+  yardAfter,
 }
 
 export const unsplash = u

@@ -279,11 +279,16 @@ quote continues in place. Landscaping pages show the consultation form there ins
 `cd web && node scripts/fetch-hero-backdrop.mjs` (keep its center and zoom in sync with `BACKDROP` in `landing.ts`, and
 retune `BACKDROP.filter` if the live imagery's color changes).
 
-**Maps:** address search and satellite imagery use Amazon Location Service (Places v2 and Maps v2). The API stack
-creates a browser key (`MapsKey`) limited to tile and place reads from the site's origins and localhost; the Web
-workflow reads its value at build time. Without a key (demo mode, `npm run dev` without `VITE_AWS_LOCATION_KEY`) the
-map falls back to Esri imagery and OpenStreetMap search, which are fine for development only. On phones, the map
-starts with a draggable outline instead of tap-to-draw; desktop is unchanged.
+**Maps:** address search uses Amazon Location Service (Places v2). The API stack creates a browser key (`MapsKey`)
+limited to tile and place reads from the site's origins and localhost; the Web workflow reads its value at build time.
+Satellite imagery comes from the Google Map Tiles API when the `VITE_GOOGLE_MAPS_KEY` GitHub variable is set
+(Google's aerial photography is much sharper than AWS's in DFW; 100k tiles a month are free), otherwise from Amazon
+Location (Maps v2). Create the Google key in a Google Cloud project with billing and the Map Tiles API enabled, restrict
+it to the site's referrers (plus `http://localhost:5173/*` for development) and to the Map Tiles API, and set a daily
+quota as a spending cap. Google's terms require the Google Maps logo and the imagery's copyright text on the map; the
+quote map adds both. Without any key (demo mode, `npm run dev` without keys) the map falls back to Esri imagery and
+OpenStreetMap search, which are fine for development only. On phones, the map starts with a draggable outline instead
+of tap-to-draw; desktop is unchanged.
 
 **Tracking:** each instant-quote step (`shared/funnel.ts`) is recorded anonymously via `POST /events` and charted on
 the admin Analytics page. To also send events to ad platforms, set these GitHub variables in the `production`

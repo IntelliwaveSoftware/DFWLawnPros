@@ -15,7 +15,9 @@ export function PortfolioProject() {
   const project = getProject(slug)
   const [lightbox, setLightbox] = useState<number | null>(null)
   useSeo({
-    title: project ? `${project.title}: ${project.services.join(', ')} in ${project.city}, TX` : 'Portfolio',
+    title: project
+      ? `${project.title === project.city ? '' : `${project.title}: `}${project.services.join(', ')} in ${project.city}, TX`
+      : 'Portfolio',
     description: project?.summary,
     image: project?.cover,
   })

@@ -96,3 +96,14 @@
 .leaflet-container {
   font-family: var(--font-sans);
 }
+
+/* Google's attribution rules: logo 16–19px tall, never covered; keep the copyright text clear of it. */
+.google-maps-logo {
+  display: block;
+  height: 18px;
+  width: auto;
+  pointer-events: none;
+}
+.leaflet-container:has(.google-maps-logo) .leaflet-bottom.leaflet-right {
+  max-width: calc(100% - 116px);
+}

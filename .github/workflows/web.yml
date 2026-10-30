@@ -84,6 +84,8 @@ jobs:
         env:
           VITE_PUBLIC_PHONE: ${{ vars.VITE_PUBLIC_PHONE }}
           VITE_PUBLIC_EMAIL: ${{ vars.VITE_PUBLIC_EMAIL }}
+          # Satellite imagery; without it the map uses Amazon Location's.
+          VITE_GOOGLE_MAPS_KEY: ${{ vars.VITE_GOOGLE_MAPS_KEY }}
           # Dev only: sent to the dev API on every request (the dev site itself is IP/password-gated).
           VITE_API_ACCESS_TOKEN: ${{ secrets.API_ACCESS_TOKEN }}
           # Ad-platform tracking; each script loads only when its ID is set.
