@@ -325,8 +325,9 @@ export function InstantQuote({ embedded = false, addressRequest, initialItems }:
                   <span className="font-display ml-2 text-xl">{sqft ? `${num(Math.round(sqft))} sq ft` : '—'}</span>
                 </div>
               </div>
+              {/* Raised clear of the map's bottom-left logo, which Google's terms say must never be covered. */}
               {step === 'measure' && phone && (
-                <div className="absolute bottom-3 left-1/2 z-[500] flex -translate-x-1/2 gap-2">
+                <div className="absolute bottom-11 left-1/2 z-[500] flex -translate-x-1/2 gap-2">
                   <button className="btn-sm btn bg-white whitespace-nowrap text-ink shadow" onClick={addStarterArea}>
                     <Plus className="size-4" /> Add area
                   </button>
@@ -343,7 +344,7 @@ export function InstantQuote({ embedded = false, addressRequest, initialItems }:
                 </div>
               )}
               {step === 'measure' && !phone && (
-                <div className="absolute bottom-3 left-1/2 z-[500] flex -translate-x-1/2 gap-2">
+                <div className="absolute bottom-11 left-1/2 z-[500] flex -translate-x-1/2 gap-2">
                   <button
                     className="btn-sm btn bg-white text-ink shadow disabled:opacity-40"
                     disabled={!drawing.length}

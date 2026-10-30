@@ -1,8 +1,11 @@
 import L from 'leaflet'
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MapContainer, Marker, Polygon, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import { HOME_ZOOM, type LatLng } from './geometry'
-import { useSatelliteSource } from './satellite'
+import { GoogleAttribution } from './GoogleAttribution'
+import { abandonGoogle, useSatelliteSource } from './satellite'
+
+const GOOGLE_FAILURES_BEFORE_FALLBACK = 4
 
 const handle = (size: number, fill: string, border: string) =>
   L.divIcon({
@@ -39,23 +42,39 @@ const homeIcon = L.divIcon({
   iconAnchor: [15, 30],
 })
 
-/** Satellite imagery (AWS or the development fallback). `onLoad` fires once the visible tiles have loaded. */
+/** Satellite imagery (Google, AWS or the development fallback). `onLoad` fires once the visible tiles have loaded. */
 export function SatelliteLayer({ onLoad }: { onLoad?: () => void }) {
   const source = useSatelliteSource()
+  const [layer, setLayer] = useState<L.TileLayer | null>(null)
+  const failedInARow = useRef(0)
   if (!source) return null
   // 512px tiles cover a 256px tile's area one zoom level up; zoomOffset keeps Leaflet's zoom levels aligned.
   const large = source.tileSize === 512
+  const handlers: L.LeafletEventHandlerFnMap = onLoad ? { load: onLoad } : {}
+  if (source.googleSession) {
+    // A stray missing tile is normal; several failures in a row mean Google has stopped serving us.
+    handlers.tileload = () => {
+      failedInARow.current = 0
+    }
+    handlers.tileerror = () => {
+      if (++failedInARow.current >= GOOGLE_FAILURES_BEFORE_FALLBACK) abandonGoogle()
+    }
+  }
   return (
-    <TileLayer
-      key={source.url}
-      url={source.url}
-      attribution={source.attribution}
-      tileSize={source.tileSize}
-      zoomOffset={large ? -1 : 0}
-      maxNativeZoom={large ? source.maxNativeZoom + 1 : source.maxNativeZoom}
-      maxZoom={21}
-      eventHandlers={onLoad ? { load: onLoad } : undefined}
-    />
+    <>
+      <TileLayer
+        key={source.url}
+        ref={setLayer}
+        url={source.url}
+        attribution={source.attribution}
+        tileSize={source.tileSize}
+        zoomOffset={large ? -1 : 0}
+        maxNativeZoom={large ? source.maxNativeZoom + 1 : source.maxNativeZoom}
+        maxZoom={21}
+        eventHandlers={handlers}
+      />
+      {source.googleSession && layer && <GoogleAttribution session={source.googleSession} layer={layer} />}
+    </>
   )
 }
 

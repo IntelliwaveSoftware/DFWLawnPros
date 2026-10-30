@@ -44,12 +44,19 @@ export const PUBLIC_EMAIL = env.VITE_PUBLIC_EMAIL || 'hello@dfwlawnpros.com'
 export const PHONE_HREF = `tel:+1${PUBLIC_PHONE.replace(/\D/g, '')}`
 
 /**
- * Amazon Location Service (address search + satellite tiles). The key is public by design: it is
- * restricted to the site's domains and to tile/place reads. Without it (demo mode, local dev),
- * the map falls back to free services that are fine for development but not for commercial traffic.
+ * Amazon Location Service (address search, and satellite tiles when there's no Google key). The key is
+ * public by design: it is restricted to the site's domains and to tile/place reads. Without it (demo
+ * mode, local dev), search and the map fall back to free services that are fine for development but
+ * not for commercial traffic.
  */
 export const AWS_LOCATION_KEY = env.VITE_AWS_LOCATION_KEY ?? ''
 export const AWS_LOCATION_REGION = env.VITE_AWS_LOCATION_REGION || COGNITO_REGION
+
+/**
+ * Google Map Tiles API key for the satellite imagery (preferred over AWS when set). Public by design:
+ * restrict it in Google Cloud to the site's referrers and to the Map Tiles API.
+ */
+export const GOOGLE_MAPS_KEY = env.VITE_GOOGLE_MAPS_KEY ?? ''
 
 /** Ad-platform tracking. Each script loads only when its ID is set (GitHub variables at build time). */
 export const GA4_ID = env.VITE_GA4_ID ?? '' // G-XXXXXXX
